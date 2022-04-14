@@ -1,4 +1,4 @@
-gnome-remote-desktop (42.0-4ubuntu1) UNRELEASED; urgency=medium
+gnome-remote-desktop (42.0-4ubuntu1) jammy; urgency=medium
 
   * debian: Prepare for ubuntu branching
   * debian/control: Update gnome-control-center breaks version for ubuntu.
@@ -6,7 +6,7 @@ gnome-remote-desktop (42.0-4ubuntu1) UNRELEASED; urgency=medium
     upgraded together with g-r-d as per lp:1968518.
     So lower the debian breaks to the ubuntu version.
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 14 Apr 2022 14:03:24 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 14 Apr 2022 14:06:18 +0200
 
 gnome-remote-desktop (42.0-4) unstable; urgency=medium
 
