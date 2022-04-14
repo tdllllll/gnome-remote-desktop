@@ -1,3 +1,13 @@
+gnome-remote-desktop (42.0-4ubuntu1) UNRELEASED; urgency=medium
+
+  * debian: Prepare for ubuntu branching
+  * debian/control: Update gnome-control-center breaks version for ubuntu.
+    We need to ensure that g-c-c that uses new RDP and VNC gsettings keys is
+    upgraded together with g-r-d as per lp:1968518.
+    So lower the debian breaks to the ubuntu version.
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 14 Apr 2022 14:03:24 +0200
+
 gnome-remote-desktop (42.0-4) unstable; urgency=medium
 
   * debian/patches: Ensure support with nvidia drivers >= 495
