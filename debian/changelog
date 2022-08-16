@@ -1,4 +1,4 @@
-gnome-remote-desktop (42.4-0ubuntu1) UNRELEASED; urgency=medium
+gnome-remote-desktop (42.4-0ubuntu1) jammy; urgency=medium
 
   * New upstream version (LP: #1983788)
 
