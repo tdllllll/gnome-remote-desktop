@@ -5,7 +5,8 @@
 Source: gnome-remote-desktop
 Section: gnome
 Priority: optional
-Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
 Uploaders: Jeremy Bicha <jbicha@ubuntu.com>, Laurent Bigonville <bigon@debian.org>
 Build-Depends: debhelper-compat (= 13),
                asciidoc-base,
@@ -41,7 +42,7 @@ Architecture: linux-any
 Depends: ${misc:Depends},
          ${shlibs:Depends},
          fuse3,
-         libmutter-10-0 (>= 42),
+         libmutter-11-0 (>= 43),
          pipewire (>= 0.3.0),
          pipewire-media-session | wireplumber,
 Breaks: gnome-control-center (<< 1:42)
