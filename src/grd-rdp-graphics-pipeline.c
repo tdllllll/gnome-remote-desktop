@@ -169,6 +169,8 @@ grd_rdp_graphics_pipeline_create_surface (GrdRdpGraphicsPipeline *graphics_pipel
   uint16_t aligned_width;
   uint16_t aligned_height;
 
+  g_debug ("[RDP.RDPGFX] Creating surface with id %u", surface_id);
+
   surface_context = g_malloc0 (sizeof (GfxSurfaceContext));
 
   g_mutex_lock (&graphics_pipeline->gfx_mutex);
@@ -193,7 +195,7 @@ grd_rdp_graphics_pipeline_create_surface (GrdRdpGraphicsPipeline *graphics_pipel
       uint16_t aligned_width_16;
       uint16_t aligned_height_16;
 
-      g_debug ("[RDP.RDPGFX] Creating NVENC session for surface %u", surface_id);
+      g_debug ("[RDP.RDPGFX] Created NVENC session for surface %u", surface_id);
 
       aligned_width_16 = grd_get_aligned_size (surface_width, 16);
       aligned_height_16 = grd_get_aligned_size (surface_height, 16);
@@ -223,9 +225,6 @@ grd_rdp_graphics_pipeline_create_surface (GrdRdpGraphicsPipeline *graphics_pipel
       g_autoptr (GrdRdpGfxSurface) render_surface = NULL;
       GrdRdpGfxSurfaceDescriptor surface_descriptor = {};
 
-      g_debug ("[RDP.RDPGFX] Creating separate render surface for surface %u",
-               surface_id);
-
       surface_descriptor.flags = GRD_RDP_GFX_SURFACE_FLAG_ALIGNED_SIZE |
                                  GRD_RDP_GFX_SURFACE_FLAG_NO_HWACCEL_SESSIONS;
       surface_descriptor.surface_id = get_next_free_surface_id (graphics_pipeline);
@@ -234,6 +233,9 @@ grd_rdp_graphics_pipeline_create_surface (GrdRdpGraphicsPipeline *graphics_pipel
 
       surface_descriptor.aligned_width = aligned_width;
       surface_descriptor.aligned_height = aligned_height;
+
+      g_debug ("[RDP.RDPGFX] Creating separate render surface (id %u) for "
+               "surface %u", surface_descriptor.surface_id, surface_id);
 
       render_surface = grd_rdp_gfx_surface_new (graphics_pipeline,
                                                 &surface_descriptor);
@@ -263,6 +265,8 @@ grd_rdp_graphics_pipeline_delete_surface (GrdRdpGraphicsPipeline *graphics_pipel
   surface_id = grd_rdp_gfx_surface_get_surface_id (gfx_surface);
   codec_context_id = grd_rdp_gfx_surface_get_codec_context_id (gfx_surface);
   surface_serial = grd_rdp_gfx_surface_get_serial (gfx_surface);
+
+  g_debug ("[RDP.RDPGFX] Deleting surface with id %u", surface_id);
 
   g_mutex_lock (&graphics_pipeline->gfx_mutex);
   if (!g_hash_table_lookup_extended (graphics_pipeline->serial_surface_table,
@@ -313,6 +317,23 @@ grd_rdp_graphics_pipeline_delete_surface (GrdRdpGraphicsPipeline *graphics_pipel
   rdpgfx_context->DeleteSurface (rdpgfx_context, &delete_surface);
 }
 
+static GList *
+get_main_surfaces_from_surface_list (GList *surfaces)
+{
+  GList *main_surfaces = NULL;
+  GList *l;
+
+  for (l = surfaces; l; l = l->next)
+    {
+      GrdRdpGfxSurface *gfx_surface = l->data;
+
+      if (!grd_rdp_gfx_surface_is_auxiliary_surface (gfx_surface))
+        main_surfaces = g_list_append (main_surfaces, gfx_surface);
+    }
+
+  return main_surfaces;
+}
+
 void
 grd_rdp_graphics_pipeline_reset_graphics (GrdRdpGraphicsPipeline *graphics_pipeline,
                                           uint32_t                width,
@@ -322,6 +343,7 @@ grd_rdp_graphics_pipeline_reset_graphics (GrdRdpGraphicsPipeline *graphics_pipel
 {
   RdpgfxServerContext *rdpgfx_context = graphics_pipeline->rdpgfx_context;
   RDPGFX_RESET_GRAPHICS_PDU reset_graphics = {0};
+  GList *main_surfaces;
   GList *surfaces;
   GList *l;
 
@@ -333,7 +355,10 @@ grd_rdp_graphics_pipeline_reset_graphics (GrdRdpGraphicsPipeline *graphics_pipel
   g_hash_table_steal_all (graphics_pipeline->surface_table);
   g_mutex_unlock (&graphics_pipeline->gfx_mutex);
 
-  for (l = surfaces; l; l = l->next)
+  main_surfaces = get_main_surfaces_from_surface_list (surfaces);
+  g_list_free (surfaces);
+
+  for (l = main_surfaces; l; l = l->next)
     {
       GrdRdpGfxSurface *gfx_surface = l->data;
       GrdRdpSurface *rdp_surface;
@@ -341,7 +366,7 @@ grd_rdp_graphics_pipeline_reset_graphics (GrdRdpGraphicsPipeline *graphics_pipel
       rdp_surface = grd_rdp_gfx_surface_get_rdp_surface (gfx_surface);
       g_clear_object (&rdp_surface->gfx_surface);
     }
-  g_list_free (surfaces);
+  g_list_free (main_surfaces);
 
   /*
    * width and height refer here to the size of the Graphics Output Buffer
@@ -1466,6 +1491,7 @@ grd_rdp_graphics_pipeline_new (GrdSessionRdp              *session_rdp,
 static void
 reset_graphics_pipeline (GrdRdpGraphicsPipeline *graphics_pipeline)
 {
+  GList *main_surfaces;
   GList *surfaces;
   GList *l;
 
@@ -1478,7 +1504,10 @@ reset_graphics_pipeline (GrdRdpGraphicsPipeline *graphics_pipeline)
                                frame_serial_free, graphics_pipeline);
   g_mutex_unlock (&graphics_pipeline->gfx_mutex);
 
-  for (l = surfaces; l; l = l->next)
+  main_surfaces = get_main_surfaces_from_surface_list (surfaces);
+  g_list_free (surfaces);
+
+  for (l = main_surfaces; l; l = l->next)
     {
       GrdRdpGfxSurface *gfx_surface = l->data;
       GrdRdpSurface *rdp_surface;
@@ -1486,7 +1515,7 @@ reset_graphics_pipeline (GrdRdpGraphicsPipeline *graphics_pipeline)
       rdp_surface = grd_rdp_gfx_surface_get_rdp_surface (gfx_surface);
       g_clear_object (&rdp_surface->gfx_surface);
     }
-  g_list_free (surfaces);
+  g_list_free (main_surfaces);
 
   g_mutex_lock (&graphics_pipeline->gfx_mutex);
   graphics_pipeline->frame_acks_suspended = FALSE;
