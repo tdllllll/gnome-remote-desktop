@@ -311,8 +311,7 @@ grd_clipboard_request_server_content_for_mime_type_async (GrdClipboard *clipboar
 
   g_return_if_fail (klass->submit_requested_server_content);
 
-  if (!priv->enabled)
-    return;
+  g_assert (priv->enabled);
 
   g_debug ("Clipboard[SelectionRead]: Requesting data from servers clipboard"
            " (mime type: %s)", grd_mime_type_to_string (mime_type));
@@ -375,7 +374,6 @@ grd_clipboard_update_client_mime_type_list (GrdClipboard *clipboard,
 {
   GrdClipboardClass *klass = GRD_CLIPBOARD_GET_CLASS (clipboard);
   GrdClipboardPrivate *priv = grd_clipboard_get_instance_private (clipboard);
-  GList *l;
 
   /**
    * Ensure that the response with the read mime type content is sent to the
@@ -388,8 +386,7 @@ grd_clipboard_update_client_mime_type_list (GrdClipboard *clipboard,
   if (!klass->update_client_mime_type_list)
     return;
 
-  for (l = mime_type_list; l; l = l->next)
-    g_hash_table_remove (priv->client_mime_type_tables, l->data);
+  g_hash_table_remove_all (priv->client_mime_type_tables);
 
   g_debug ("Clipboard[SelectionOwnerChanged]: Updating clients clipboard");
   klass->update_client_mime_type_list (clipboard, mime_type_list);

@@ -183,8 +183,10 @@ update_ping_source (GrdRdpNetworkAutodetection *network_autodetection)
   else
     new_ping_interval_type = PING_INTERVAL_LOW;
 
-  if (network_autodetection->ping_interval != new_ping_interval_type &&
-      network_autodetection->ping_source)
+  if (network_autodetection->ping_interval == new_ping_interval_type)
+    return;
+
+  if (network_autodetection->ping_source)
     {
       g_source_destroy (network_autodetection->ping_source);
       g_clear_pointer (&network_autodetection->ping_source, g_source_unref);
@@ -343,7 +345,7 @@ track_round_trip_time (GrdRdpNetworkAutodetection *network_autodetection,
   RTTInfo *rtt_info;
 
   rtt_info = g_malloc0 (sizeof (RTTInfo));
-  rtt_info->round_trip_time_us = MIN (pong_time_us - ping_time_us, G_USEC_PER_SEC);
+  rtt_info->round_trip_time_us = pong_time_us - ping_time_us;
   rtt_info->response_time_us = pong_time_us;
 
   g_queue_push_tail (network_autodetection->round_trip_times, rtt_info);
