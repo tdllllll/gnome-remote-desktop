@@ -1,4 +1,4 @@
-gnome-remote-desktop (42.8-0ubuntu0.22.04.1) UNRELEASED; urgency=medium
+gnome-remote-desktop (42.8-0ubuntu0.22.04.1) jammy; urgency=medium
 
   * New upstream release (LP: #1998966):
     - vnc: Ensure PipeWire buffers to be queued before destroying them
@@ -7,7 +7,7 @@ gnome-remote-desktop (42.8-0ubuntu0.22.04.1) UNRELEASED; urgency=medium
       (LP: #2024240)
   * debian: Add tests dependencies and run tests failing in case
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 16 Jun 2023 22:59:42 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 16 Jun 2023 22:59:49 +0200
 
 gnome-remote-desktop (42.7-0ubuntu1) jammy; urgency=medium
 
