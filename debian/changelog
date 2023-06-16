@@ -1,3 +1,10 @@
+gnome-remote-desktop (44.2-0ubuntu1) lunar; urgency=medium
+
+  * New upstream release (LP: #2024197)
+  * debian/upstream/metadata: trivial fix for format error
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 16 Jun 2023 09:58:47 -0400
+
 gnome-remote-desktop (44.0-1) experimental; urgency=medium
 
   * New upstream release
