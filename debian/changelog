@@ -1,3 +1,9 @@
+gnome-remote-desktop (42.8-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 16 Jun 2023 12:45:40 -0400
+
 gnome-remote-desktop (42.7-0ubuntu1) jammy; urgency=medium
 
   * New upstream release (LP: #1998966)
