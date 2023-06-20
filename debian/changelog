@@ -1,6 +1,6 @@
 gnome-remote-desktop (42.8-0ubuntu0.22.04.1) jammy; urgency=medium
 
-  * New upstream release (LP: #1998966):
+  * New upstream release (LP: #2024248):
     - vnc: Ensure PipeWire buffers to be queued before destroying them
       (LP: #2024238)
     - rdp: Ensure PipeWire buffers to be queued before destroying them
