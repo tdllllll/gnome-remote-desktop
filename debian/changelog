@@ -1,10 +1,10 @@
-gnome-remote-desktop (42.9-0ubuntu0.22.04.1) UNRELEASED; urgency=medium
+gnome-remote-desktop (42.9-0ubuntu0.22.04.1) jammy; urgency=medium
 
   * New upstream release (LP: #2024248):
     - Fixes a crash found during verification of 42.8, see the bug
       above for further details.
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 05 Jul 2023 19:44:33 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 05 Jul 2023 19:54:01 +0200
 
 gnome-remote-desktop (42.8-0ubuntu0.22.04.1) jammy; urgency=medium
 
