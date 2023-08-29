@@ -1,0 +1,38 @@
+From: Pascal Nowack <Pascal.Nowack@gmx.de>
+Date: Sun, 27 Aug 2023 09:58:36 +0200
+Subject: rdp-pipewire-stream: Do not prematurely clear PipeWire stream
+
+With the now implemented blocking mechanism in the remove_buffer
+callback, PipeWire won't destroy buffers anymore, as long they are still
+in use.
+However, in order to queue a PipeWire buffer again, the PipeWire stream
+is needed. But when destroying the stream, the stream is set to NULL
+before it is destroyed.
+This is problematic on the 42.x branch, as on that branch PipeWire
+buffers can still be dequeued, while the EGL thread finishes processing
+of the already dequeued PipeWire buffers.
+As a result, these newly dequeued buffers trigger a crash, when queueing
+these buffers again, as the respective PipeWire stream is already NULL.
+
+Fix this issue, by not setting the PipeWire to NULL, when destroying it.
+
+Fixes: https://errors.ubuntu.com/problem/b9db6ccdb84569be427829049e6f135d9777e574
+Origin: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/197
+---
+ src/grd-rdp-pipewire-stream.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/grd-rdp-pipewire-stream.c b/src/grd-rdp-pipewire-stream.c
+index 7ef9222..99ae1ef 100644
+--- a/src/grd-rdp-pipewire-stream.c
++++ b/src/grd-rdp-pipewire-stream.c
+@@ -1386,7 +1386,8 @@ grd_rdp_pipewire_stream_finalize (GObject *object)
+   if (egl_thread && stream->pipewire_stream)
+     sync_egl_thread (egl_thread);
+ 
+-  g_clear_pointer (&stream->pipewire_stream, pw_stream_destroy);
++  if (stream->pipewire_stream)
++    pw_stream_destroy (stream->pipewire_stream);
+ 
+   g_clear_pointer (&stream->pipewire_core, pw_core_disconnect);
+   g_clear_pointer (&stream->pipewire_context, pw_context_destroy);
