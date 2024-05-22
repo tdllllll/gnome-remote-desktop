@@ -1,3 +1,9 @@
+gnome-remote-desktop (46.2-1~ubuntu24.04.1) UNRELEASED; urgency=medium
+
+  * No-change backport to noble
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 22 May 2024 19:37:04 +0200
+
 gnome-remote-desktop (46.2-1) experimental; urgency=medium
 
   * SECURITY UPDATE: New upstream release (LP: #2066306)
@@ -13,12 +19,14 @@ gnome-remote-desktop (46.2-1) experimental; urgency=medium
 gnome-remote-desktop (46.1-4) experimental; urgency=medium
 
   * Run dh_installtmpfiles, then dh_installsysfiles, then dh_installtmpfiles
+    (LP: #2063333)
 
  -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 06 May 2024 07:15:49 -0400
 
 gnome-remote-desktop (46.1-3) experimental; urgency=medium
 
   * Ensure that dh_installtmpfiles is run before dh_installsysusers
+    (LP: #2063333)
   * Temporarily ignore build test failures on Debian
 
  -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 05 May 2024 19:37:58 -0400
