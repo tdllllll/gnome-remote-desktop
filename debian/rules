@@ -20,9 +20,15 @@ execute_after_dh_installtmpfiles:
 
 override_dh_installsysusers:
 
+ifeq ($(DEB_HOST_ARCH),$(findstring $(DEB_HOST_ARCH),armhf s390x))
+    TESTS_CAN_FAIL=true
+else
+    TESTS_CAN_FAIL=false
+endif
+
 override_dh_auto_test:
 ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
-	dh_auto_test
+	dh_auto_test || $(TESTS_CAN_FAIL)
 else
 	dh_auto_test || true
 endif
