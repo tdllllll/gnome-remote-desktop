@@ -1,3 +1,9 @@
+gnome-remote-desktop (46.3-0ubuntu1) UNRELEASED; urgency=medium
+
+  * New upstream release (LP: #2072771)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 11 Jul 2024 11:26:56 -0400
+
 gnome-remote-desktop (46.2-1~ubuntu24.04.2) noble-security; urgency=medium
 
   * debian/rules: ignore failing tests on armhf and riscv64.
