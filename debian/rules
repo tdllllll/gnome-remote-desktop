@@ -13,10 +13,9 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,-O1 -Wl,-z,defs
 override_dh_auto_configure:
 	dh_auto_configure -- -Dfdk_aac=false
 
-# The tmpfiles postinst must be before the sysusers postinst
-execute_after_dh_installtmpfiles:
-	dh_installsysusers
-	dh_installtmpfiles
+# We manually handle tmpfiles & sysusers in postinst
+# Remove these 2 empty overrides when postinst is dropped
+override_dh_installtmpfiles:
 
 override_dh_installsysusers:
 
