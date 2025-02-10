@@ -1,0 +1,29 @@
+From: =?utf-8?q?Jeremy_B=C3=ADcha?= <jeremy.bicha@canonical.com>
+Date: Mon, 10 Feb 2025 10:18:59 -0500
+Subject: Remove unused libva dependencies
+
+These are required for gnome-remote-desktop 48 Beta
+(although even there they are unused by default since
+the new zero-copy render feature is opt in)
+
+Temporarily remove these dependencies since
+Ubuntu doesn't have libva in main yet
+---
+ meson.build | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 20665a5..b239774 100644
+--- a/meson.build
++++ b/meson.build
+@@ -59,8 +59,8 @@ if have_rdp
+   freerdp_client_dep = dependency('freerdp-client3', version: freerdp_req)
+   freerdp_server_dep = dependency('freerdp-server3', version: freerdp_req)
+   fuse_dep = dependency('fuse3', version: fuse_req)
+-  libva_dep = dependency('libva')
+-  libva_drm_dep = dependency('libva-drm')
++#  libva_dep = dependency('libva')
++#  libva_drm_dep = dependency('libva-drm')
+   opus_dep = dependency('opus')
+   polkit_dep = dependency('polkit-gobject-1', version: polkit_req)
+   vulkan_dep = dependency('vulkan', version: vulkan_req)
