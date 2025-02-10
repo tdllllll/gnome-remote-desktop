@@ -34,12 +34,26 @@ typedef struct
 struct _GrdRdpPwBuffer
 {
   struct pw_buffer *pw_buffer;
+  GrdRdpBufferType buffer_type;
+  GrdRdpPwBufferDmaBufInfo *dma_buf_info;
 
   GMutex buffer_mutex;
   gboolean is_locked;
 
   GrdRdpMemFd mem_fd;
 };
+
+GrdRdpBufferType
+grd_rdp_pw_buffer_get_buffer_type (GrdRdpPwBuffer *rdp_pw_buffer)
+{
+  return rdp_pw_buffer->buffer_type;
+}
+
+const GrdRdpPwBufferDmaBufInfo *
+grd_rdp_pw_buffer_get_dma_buf_info (GrdRdpPwBuffer *rdp_pw_buffer)
+{
+  return rdp_pw_buffer->dma_buf_info;
+}
 
 uint8_t *
 grd_rdp_pw_buffer_get_mapped_data (GrdRdpPwBuffer *rdp_pw_buffer,
@@ -90,6 +104,39 @@ get_pw_buffer_type (struct pw_buffer *pw_buffer)
 }
 
 static gboolean
+is_supported_dma_buf_buffer (struct pw_buffer  *pw_buffer,
+                             GError           **error)
+{
+  struct spa_buffer *spa_buffer = pw_buffer->buffer;
+  uint32_t n_planes = spa_buffer->n_datas;
+
+  if (n_planes != 1)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Unsupported dma-buf: Expected exactly 1 plane for format");
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static GrdRdpPwBufferDmaBufInfo *
+dma_buf_info_new (struct pw_buffer *pw_buffer)
+{
+  struct spa_buffer *spa_buffer = pw_buffer->buffer;
+  GrdRdpPwBufferDmaBufInfo *dma_buf_info;
+
+  g_assert (spa_buffer->n_datas == 1);
+
+  dma_buf_info = g_new0 (GrdRdpPwBufferDmaBufInfo, 1);
+  dma_buf_info->fd = spa_buffer->datas[0].fd;
+  dma_buf_info->offset = spa_buffer->datas[0].chunk->offset;
+  dma_buf_info->stride = spa_buffer->datas[0].chunk->stride;
+
+  return dma_buf_info;
+}
+
+static gboolean
 try_mmap_buffer (GrdRdpPwBuffer  *rdp_pw_buffer,
                  GError         **error)
 {
@@ -124,14 +171,27 @@ grd_rdp_pw_buffer_new (struct pw_buffer  *pw_buffer,
 
   g_mutex_init (&rdp_pw_buffer->buffer_mutex);
 
-  if (get_pw_buffer_type (pw_buffer) != SPA_DATA_MemFd &&
-      get_pw_buffer_type (pw_buffer) != SPA_DATA_DmaBuf)
+  switch (get_pw_buffer_type (pw_buffer))
     {
+    case SPA_DATA_MemFd:
+      rdp_pw_buffer->buffer_type = GRD_RDP_BUFFER_TYPE_MEM_FD;
+      break;
+    case SPA_DATA_DmaBuf:
+      rdp_pw_buffer->buffer_type = GRD_RDP_BUFFER_TYPE_DMA_BUF;
+      break;
+    default:
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "PipeWire buffer contains invalid data type 0x%08X",
                    get_pw_buffer_type (pw_buffer));
       return NULL;
     }
+
+  if (get_pw_buffer_type (pw_buffer) == SPA_DATA_DmaBuf &&
+      !is_supported_dma_buf_buffer (pw_buffer, error))
+    return NULL;
+
+  if (get_pw_buffer_type (pw_buffer) == SPA_DATA_DmaBuf)
+    rdp_pw_buffer->dma_buf_info = dma_buf_info_new (pw_buffer);
 
   if (get_pw_buffer_type (pw_buffer) == SPA_DATA_MemFd &&
       !try_mmap_buffer (rdp_pw_buffer, error))
@@ -156,6 +216,7 @@ void
 grd_rdp_pw_buffer_free (GrdRdpPwBuffer *rdp_pw_buffer)
 {
   maybe_unmap_buffer (rdp_pw_buffer);
+  g_clear_pointer (&rdp_pw_buffer->dma_buf_info, g_free);
 
   g_mutex_clear (&rdp_pw_buffer->buffer_mutex);
   g_free (rdp_pw_buffer);

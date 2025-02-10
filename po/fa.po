@@ -9,7 +9,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/"
 "issues/\n"
 "POT-Creation-Date: 2024-11-02 21:02+0000\n"
-"PO-Revision-Date: 2024-11-04 13:11+0330\n"
+"PO-Revision-Date: 2024-11-04 13:12+0330\n"
 "Last-Translator: Danial Behzadi <dani.behzi@ubuntu.com>\n"
 "Language-Team: Persian <fa@li.org>\n"
 "Language: fa\n"
@@ -20,14 +20,14 @@ msgstr ""
 "X-Generator: Poedit 3.4.4\n"
 
 #: data/org.gnome.remotedesktop.configure-system-daemon.policy.in:11
-msgid "Allow to configure gnome-remote-desktop's system daemon settings."
-msgstr "اجازه به پیکربندی تنظیمات خدمت سامانهٔ gnome-remote-desktop."
+msgid "Allow to configure gnome-remote-desktop's system daemon settings"
+msgstr "اجازه به پیکربندی تنظیمات خدمت سامانهٔ gnome-remote-desktop"
 
 #: data/org.gnome.remotedesktop.configure-system-daemon.policy.in:12
 msgid ""
 "Authentication is required to configure gnome-remote-desktop's system daemon "
-"settings."
-msgstr "نیازمند هویت‌سنجی برای پیکربندی تنظیمات خدمت سامانهٔ gnome-remote-desktop."
+"settings"
+msgstr "نیازمند هویت‌سنجی برای پیکربندی تنظیمات خدمت سامانهٔ gnome-remote-desktop"
 
 #: data/org.gnome.remotedesktop.enable-system-daemon.policy.in:11
 msgid "Allow to enable and disable gnome-remote-desktop's system daemon"
@@ -36,9 +36,9 @@ msgstr "اجازهٔ به و از کار انداختن خدمت سامانهٔ 
 #: data/org.gnome.remotedesktop.enable-system-daemon.policy.in:12
 msgid ""
 "Authentication is required to enable or disable gnome-remote-desktop's system "
-"daemon."
+"daemon"
 msgstr ""
-"نیازمند هویت‌سنجی برای به یا از کار انداختن خدمت سامانهٔ gnome-remote-desktop."
+"نیازمند هویت‌سنجی برای به یا از کار انداختن خدمت سامانهٔ gnome-remote-desktop"
 
 #: data/org.gnome.RemoteDesktop.Handover.desktop.in:4
 msgid "GNOME Remote Desktop Handover Daemon"

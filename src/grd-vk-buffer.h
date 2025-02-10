@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Pascal Nowack
+ * Copyright (C) 2022 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -17,21 +17,32 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_BUFFER_H
-#define GRD_RDP_BUFFER_H
+#ifndef GRD_VK_BUFFER_H
+#define GRD_VK_BUFFER_H
 
 #include <glib-object.h>
+#include <vulkan/vulkan.h>
 
 #include "grd-types.h"
 
-#define GRD_TYPE_RDP_BUFFER (grd_rdp_buffer_get_type ())
-G_DECLARE_FINAL_TYPE (GrdRdpBuffer, grd_rdp_buffer,
-                      GRD, RDP_BUFFER, GObject)
+#define GRD_TYPE_VK_BUFFER (grd_vk_buffer_get_type ())
+G_DECLARE_FINAL_TYPE (GrdVkBuffer, grd_vk_buffer,
+                      GRD, VK_BUFFER, GObject)
 
-GrdRdpBuffer *grd_rdp_buffer_new (GrdRdpPwBuffer    *rdp_pw_buffer,
-                                  GrdRdpBufferInfo  *rdp_buffer_info,
-                                  GrdRdpSurface     *rdp_surface,
-                                  GrdVkDevice       *vk_device,
-                                  GError           **error);
+typedef struct
+{
+  VkBufferUsageFlags usage_flags;
 
-#endif /* GRD_RDP_BUFFER_H */
+  VkDeviceSize size;
+  VkMemoryPropertyFlagBits memory_flags;
+} GrdVkBufferDescriptor;
+
+GrdVkBuffer *grd_vk_buffer_new (GrdVkDevice                  *device,
+                                const GrdVkBufferDescriptor  *buffer_descriptor,
+                                GError                      **error);
+
+VkBuffer grd_vk_buffer_get_buffer (GrdVkBuffer *buffer);
+
+GrdVkMemory *grd_vk_buffer_get_memory (GrdVkBuffer *buffer);
+
+#endif /* GRD_VK_BUFFER_H */

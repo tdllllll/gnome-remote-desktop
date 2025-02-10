@@ -32,6 +32,7 @@ G_DECLARE_FINAL_TYPE (GrdRdpSurfaceRenderer, grd_rdp_surface_renderer,
 GrdRdpSurfaceRenderer *grd_rdp_surface_renderer_new (GrdRdpSurface  *rdp_surface,
                                                      GrdRdpRenderer *renderer,
                                                      GrdSessionRdp  *session_rdp,
+                                                     GrdVkDevice    *vk_device,
                                                      uint32_t        refresh_rate);
 
 uint32_t grd_rdp_surface_renderer_get_refresh_rate (GrdRdpSurfaceRenderer *surface_renderer);
@@ -41,8 +42,17 @@ gboolean grd_rdp_surface_renderer_is_rendering_suspended (GrdRdpSurfaceRenderer 
 void grd_rdp_surface_renderer_update_suspension_state (GrdRdpSurfaceRenderer *surface_renderer,
                                                        gboolean               suspend_rendering);
 
-void grd_rdp_surface_renderer_submit_buffer (GrdRdpSurfaceRenderer *surface_renderer,
-                                             GrdRdpBuffer          *buffer);
+gboolean grd_rdp_surface_renderer_register_pw_buffer (GrdRdpSurfaceRenderer  *surface_renderer,
+                                                      GrdRdpPwBuffer         *rdp_pw_buffer,
+                                                      uint32_t                drm_format,
+                                                      uint64_t                drm_format_modifier,
+                                                      GError                **error);
+
+void grd_rdp_surface_renderer_unregister_pw_buffer (GrdRdpSurfaceRenderer *surface_renderer,
+                                                    GrdRdpPwBuffer        *rdp_pw_buffer);
+
+void grd_rdp_surface_renderer_submit_legacy_buffer (GrdRdpSurfaceRenderer *surface_renderer,
+                                                    GrdRdpLegacyBuffer    *buffer);
 
 void grd_rdp_surface_renderer_trigger_render_source (GrdRdpSurfaceRenderer *surface_renderer);
 

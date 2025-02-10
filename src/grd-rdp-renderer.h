@@ -29,6 +29,12 @@
 G_DECLARE_FINAL_TYPE (GrdRdpRenderer, grd_rdp_renderer,
                       GRD, RDP_RENDERER, GObject)
 
+typedef enum
+{
+  GRD_RDP_ACQUIRE_CONTEXT_FLAG_NONE = 0,
+  GRD_RDP_ACQUIRE_CONTEXT_FLAG_FORCE_RESET = 1 << 0,
+} GrdRdpAcquireContextFlags;
+
 GrdRdpRenderer *grd_rdp_renderer_new (GrdSessionRdp    *session_rdp,
                                       GrdHwAccelNvidia *hwaccel_nvidia);
 
@@ -39,9 +45,10 @@ void grd_rdp_renderer_update_output_suppression_state (GrdRdpRenderer *renderer,
 
 void grd_rdp_renderer_invoke_shutdown (GrdRdpRenderer *renderer);
 
-void grd_rdp_renderer_notify_session_started (GrdRdpRenderer         *renderer,
-                                              GrdRdpGraphicsPipeline *graphics_pipeline,
-                                              rdpContext             *rdp_context);
+gboolean grd_rdp_renderer_start (GrdRdpRenderer         *renderer,
+                                 GrdHwAccelVulkan       *hwaccel_vulkan,
+                                 GrdRdpGraphicsPipeline *graphics_pipeline,
+                                 rdpContext             *rdp_context);
 
 void grd_rdp_renderer_notify_new_desktop_layout (GrdRdpRenderer *renderer,
                                                  uint32_t        desktop_width,
@@ -61,8 +68,9 @@ GrdRdpSurface *grd_rdp_renderer_try_acquire_surface (GrdRdpRenderer *renderer,
 void grd_rdp_renderer_release_surface (GrdRdpRenderer *renderer,
                                        GrdRdpSurface  *rdp_surface);
 
-GrdRdpRenderContext *grd_rdp_renderer_try_acquire_render_context (GrdRdpRenderer *renderer,
-                                                                  GrdRdpSurface  *rdp_surface);
+GrdRdpRenderContext *grd_rdp_renderer_try_acquire_render_context (GrdRdpRenderer            *renderer,
+                                                                  GrdRdpSurface             *rdp_surface,
+                                                                  GrdRdpAcquireContextFlags  flags);
 
 void grd_rdp_renderer_release_render_context (GrdRdpRenderer      *renderer,
                                               GrdRdpRenderContext *render_context);
@@ -72,6 +80,6 @@ void grd_rdp_renderer_clear_render_contexts (GrdRdpRenderer *renderer);
 gboolean grd_rdp_renderer_render_frame (GrdRdpRenderer      *renderer,
                                         GrdRdpSurface       *rdp_surface,
                                         GrdRdpRenderContext *render_context,
-                                        GrdRdpBuffer        *rdp_buffer);
+                                        GrdRdpLegacyBuffer  *buffer);
 
 #endif /* GRD_RDP_RENDERER_H */

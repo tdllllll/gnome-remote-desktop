@@ -83,6 +83,8 @@ if have_rdp
     'grd-clipboard-rdp.h',
     'grd-hwaccel-nvidia.c',
     'grd-hwaccel-nvidia.h',
+    'grd-hwaccel-vulkan.c',
+    'grd-hwaccel-vulkan.h',
     'grd-rdp-audio-input.c',
     'grd-rdp-audio-input.h',
     'grd-rdp-audio-output-stream.c',
@@ -91,6 +93,7 @@ if have_rdp
     'grd-rdp-audio-playback.h',
     'grd-rdp-buffer.c',
     'grd-rdp-buffer.h',
+    'grd-rdp-buffer-info.h',
     'grd-rdp-buffer-pool.c',
     'grd-rdp-buffer-pool.h',
     'grd-rdp-connect-time-autodetection.c',
@@ -124,6 +127,8 @@ if have_rdp
     'grd-rdp-graphics-pipeline.h',
     'grd-rdp-layout-manager.c',
     'grd-rdp-layout-manager.h',
+    'grd-rdp-legacy-buffer.c',
+    'grd-rdp-legacy-buffer.h',
     'grd-rdp-monitor-config.c',
     'grd-rdp-monitor-config.h',
     'grd-rdp-network-autodetection.c',
@@ -157,6 +162,18 @@ if have_rdp
     'grd-session-rdp.h',
     'grd-shell-dialog.c',
     'grd-shell-dialog.h',
+    'grd-vk-buffer.c',
+    'grd-vk-buffer.h',
+    'grd-vk-device.c',
+    'grd-vk-device.h',
+    'grd-vk-image.c',
+    'grd-vk-image.h',
+    'grd-vk-memory.c',
+    'grd-vk-memory.h',
+    'grd-vk-queue.c',
+    'grd-vk-queue.h',
+    'grd-vk-utils.c',
+    'grd-vk-utils.h',
   ])
 
   if libsystemd_dep.found()
@@ -182,6 +199,7 @@ if have_rdp
     freerdp_server_dep,
     fuse_dep,
     opus_dep,
+    vulkan_dep,
     winpr_dep,
   ]
 endif
