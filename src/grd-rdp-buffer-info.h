@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015,2022 Red Hat Inc.
+ * Copyright (C) 2024 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -15,20 +15,26 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
  * 02111-1307, USA.
- *
  */
 
-#ifndef GRD_DEBUG_H
-#define GRD_DEBUG_H
+#ifndef GRD_RDP_BUFFER_INFO_H
+#define GRD_RDP_BUFFER_INFO_H
 
-typedef enum _GrdDebugFlags
+#include <stdint.h>
+
+typedef enum
 {
-  GRD_DEBUG_NONE = 0,
-  GRD_DEBUG_VNC = 1 << 0,
-  GRD_DEBUG_TPM = 1 << 1,
-  GRD_DEBUG_VK_VALIDATION = 1 << 2,
-} GrdDebugFlags;
+  GRD_RDP_BUFFER_TYPE_NONE,
+  GRD_RDP_BUFFER_TYPE_DMA_BUF,
+  GRD_RDP_BUFFER_TYPE_MEM_FD,
+} GrdRdpBufferType;
 
-GrdDebugFlags grd_get_debug_flags (void);
+struct _GrdRdpBufferInfo
+{
+  GrdRdpBufferType buffer_type;
 
-#endif /* GRD_DEBUG_H */
+  uint32_t drm_format;
+  uint64_t drm_format_modifier;
+};
+
+#endif /* GRD_RDP_BUFFER_INFO_H */

@@ -21,8 +21,12 @@
 
 #include "grd-rdp-surface-renderer.h"
 
+#include <drm_fourcc.h>
+
 #include "grd-rdp-buffer.h"
 #include "grd-rdp-damage-detector.h"
+#include "grd-rdp-legacy-buffer.h"
+#include "grd-rdp-pw-buffer.h"
 #include "grd-rdp-renderer.h"
 #include "grd-rdp-session-metrics.h"
 #include "grd-rdp-surface.h"
@@ -35,15 +39,20 @@ struct _GrdRdpSurfaceRenderer
   GrdRdpSurface *rdp_surface;
   GrdRdpRenderer *renderer;
   GrdSessionRdp *session_rdp;
+  GrdVkDevice *vk_device;
 
   uint32_t refresh_rate;
 
   GSource *render_source;
   gboolean rendering_suspended;
+  gboolean pending_render_context_reset;
 
   gboolean graphics_subsystem_failed;
 
   GMutex render_mutex;
+
+  GHashTable *registered_buffers;
+  GrdRdpBufferInfo *rdp_buffer_info;
 };
 
 G_DEFINE_TYPE (GrdRdpSurfaceRenderer, grd_rdp_surface_renderer, G_TYPE_OBJECT)
@@ -71,14 +80,145 @@ grd_rdp_surface_renderer_update_suspension_state (GrdRdpSurfaceRenderer *surface
     grd_rdp_surface_renderer_trigger_render_source (surface_renderer);
 }
 
+static gboolean
+is_buffer_combination_valid (GrdRdpSurfaceRenderer  *surface_renderer,
+                             GrdRdpPwBuffer         *rdp_pw_buffer,
+                             GError                **error)
+{
+  GrdRdpBufferInfo *rdp_buffer_info = surface_renderer->rdp_buffer_info;
+  GrdRdpBufferType buffer_type;
+
+  if (g_hash_table_size (surface_renderer->registered_buffers) == 0)
+    return TRUE;
+
+  g_assert (rdp_buffer_info);
+
+  buffer_type = grd_rdp_pw_buffer_get_buffer_type (rdp_pw_buffer);
+  if (buffer_type != rdp_buffer_info->buffer_type)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Invalid buffer combination: Mixed buffer types");
+      return FALSE;
+    }
+
+  /*
+   * No need to check whether an implicit or explicit DRM format modifier is
+   * used per buffer, since per PipeWire stream there is only one DRM format
+   * modifier and that one is used by all PW buffers of that PW stream.
+   */
+
+  return TRUE;
+}
+
+static gboolean
+is_render_context_reset_required (GrdRdpSurfaceRenderer *surface_renderer,
+                                  GrdRdpPwBuffer        *rdp_pw_buffer,
+                                  uint64_t               new_drm_format_modifier)
+{
+  GrdRdpBufferInfo *rdp_buffer_info;
+  GrdRdpBufferType buffer_type;
+  uint64_t current_drm_format_modifier;
+
+  if (g_hash_table_size (surface_renderer->registered_buffers) > 0)
+    return FALSE;
+
+  rdp_buffer_info = surface_renderer->rdp_buffer_info;
+  if (!rdp_buffer_info)
+    return FALSE;
+
+  buffer_type = rdp_buffer_info->buffer_type;
+  if (buffer_type != grd_rdp_pw_buffer_get_buffer_type (rdp_pw_buffer))
+    return TRUE;
+
+  current_drm_format_modifier = rdp_buffer_info->drm_format_modifier;
+  if (current_drm_format_modifier != DRM_FORMAT_MOD_INVALID &&
+      new_drm_format_modifier == DRM_FORMAT_MOD_INVALID)
+    return TRUE;
+  if (current_drm_format_modifier == DRM_FORMAT_MOD_INVALID &&
+      new_drm_format_modifier != DRM_FORMAT_MOD_INVALID)
+    return TRUE;
+
+  return FALSE;
+}
+
+static GrdRdpBufferInfo *
+rdp_buffer_info_new (GrdRdpPwBuffer *rdp_pw_buffer,
+                     uint32_t        drm_format,
+                     uint64_t        drm_format_modifier)
+{
+  GrdRdpBufferType buffer_type =
+    grd_rdp_pw_buffer_get_buffer_type (rdp_pw_buffer);
+  GrdRdpBufferInfo *rdp_buffer_info;
+
+  rdp_buffer_info = g_new0 (GrdRdpBufferInfo, 1);
+  rdp_buffer_info->buffer_type = buffer_type;
+  rdp_buffer_info->drm_format = drm_format;
+  rdp_buffer_info->drm_format_modifier = drm_format_modifier;
+
+  return rdp_buffer_info;
+}
+
+gboolean
+grd_rdp_surface_renderer_register_pw_buffer (GrdRdpSurfaceRenderer  *surface_renderer,
+                                             GrdRdpPwBuffer         *rdp_pw_buffer,
+                                             uint32_t                drm_format,
+                                             uint64_t                drm_format_modifier,
+                                             GError                **error)
+{
+  GrdRdpSurface *rdp_surface = surface_renderer->rdp_surface;
+  g_autofree GrdRdpBufferInfo *rdp_buffer_info = NULL;
+  GrdRdpBuffer *rdp_buffer;
+
+  if (!is_buffer_combination_valid (surface_renderer, rdp_pw_buffer, error))
+    return FALSE;
+
+  rdp_buffer_info = rdp_buffer_info_new (rdp_pw_buffer, drm_format,
+                                         drm_format_modifier);
+
+  rdp_buffer = grd_rdp_buffer_new (rdp_pw_buffer, rdp_buffer_info, rdp_surface,
+                                   surface_renderer->vk_device, error);
+  if (!rdp_buffer)
+    return FALSE;
+
+  if (is_render_context_reset_required (surface_renderer, rdp_pw_buffer,
+                                        drm_format_modifier))
+    surface_renderer->pending_render_context_reset = TRUE;
+
+  if (surface_renderer->rdp_buffer_info &&
+      surface_renderer->rdp_buffer_info->buffer_type == GRD_RDP_BUFFER_TYPE_DMA_BUF &&
+      surface_renderer->rdp_buffer_info->drm_format_modifier != drm_format_modifier)
+    g_assert (g_hash_table_size (surface_renderer->registered_buffers) == 0);
+
+  if (g_hash_table_size (surface_renderer->registered_buffers) == 0)
+    g_clear_pointer (&surface_renderer->rdp_buffer_info, g_free);
+
+  if (surface_renderer->pending_render_context_reset)
+    g_assert (!surface_renderer->rdp_buffer_info);
+
+  if (!surface_renderer->rdp_buffer_info)
+    surface_renderer->rdp_buffer_info = g_steal_pointer (&rdp_buffer_info);
+
+  g_hash_table_insert (surface_renderer->registered_buffers,
+                       rdp_pw_buffer, rdp_buffer);
+
+  return TRUE;
+}
+
 void
-grd_rdp_surface_renderer_submit_buffer (GrdRdpSurfaceRenderer *surface_renderer,
-                                        GrdRdpBuffer          *buffer)
+grd_rdp_surface_renderer_unregister_pw_buffer (GrdRdpSurfaceRenderer *surface_renderer,
+                                               GrdRdpPwBuffer        *rdp_pw_buffer)
+{
+  g_hash_table_remove (surface_renderer->registered_buffers, rdp_pw_buffer);
+}
+
+void
+grd_rdp_surface_renderer_submit_legacy_buffer (GrdRdpSurfaceRenderer *surface_renderer,
+                                               GrdRdpLegacyBuffer    *buffer)
 {
   GrdRdpSurface *rdp_surface = surface_renderer->rdp_surface;
 
   g_mutex_lock (&surface_renderer->render_mutex);
-  g_clear_pointer (&rdp_surface->pending_framebuffer, grd_rdp_buffer_release);
+  g_clear_pointer (&rdp_surface->pending_framebuffer, grd_rdp_legacy_buffer_release);
 
   rdp_surface->pending_framebuffer = buffer;
   g_mutex_unlock (&surface_renderer->render_mutex);
@@ -98,7 +238,7 @@ grd_rdp_surface_renderer_reset (GrdRdpSurfaceRenderer *surface_renderer)
   GrdRdpSurface *rdp_surface = surface_renderer->rdp_surface;
 
   g_mutex_lock (&surface_renderer->render_mutex);
-  g_clear_pointer (&rdp_surface->pending_framebuffer, grd_rdp_buffer_release);
+  g_clear_pointer (&rdp_surface->pending_framebuffer, grd_rdp_legacy_buffer_release);
   g_mutex_unlock (&surface_renderer->render_mutex);
 }
 
@@ -118,13 +258,13 @@ maybe_encode_pending_frame (GrdRdpSurfaceRenderer *surface_renderer,
   GrdRdpSurface *rdp_surface = surface_renderer->rdp_surface;
   GrdRdpSessionMetrics *session_metrics =
     grd_session_rdp_get_session_metrics (surface_renderer->session_rdp);
-  GrdRdpBuffer *buffer;
+  GrdRdpLegacyBuffer *buffer;
 
   buffer = g_steal_pointer (&rdp_surface->pending_framebuffer);
   if (!grd_rdp_damage_detector_submit_new_framebuffer (rdp_surface->detector,
                                                        buffer))
     {
-      grd_rdp_buffer_release (buffer);
+      grd_rdp_legacy_buffer_release (buffer);
       handle_graphics_subsystem_failure (surface_renderer);
       return;
     }
@@ -149,6 +289,7 @@ maybe_render_frame (gpointer user_data)
   GrdRdpSurfaceRenderer *surface_renderer = user_data;
   GrdRdpRenderer *renderer = surface_renderer->renderer;
   GrdRdpSurface *rdp_surface = surface_renderer->rdp_surface;
+  GrdRdpAcquireContextFlags acquire_flags;
   GrdRdpRenderContext *render_context;
   g_autoptr (GMutexLocker) locker = NULL;
 
@@ -162,10 +303,17 @@ maybe_render_frame (gpointer user_data)
   if (surface_renderer->rendering_suspended)
     return G_SOURCE_CONTINUE;
 
-  render_context = grd_rdp_renderer_try_acquire_render_context (renderer,
-                                                                rdp_surface);
+  acquire_flags = GRD_RDP_ACQUIRE_CONTEXT_FLAG_NONE;
+  if (surface_renderer->pending_render_context_reset)
+    acquire_flags |= GRD_RDP_ACQUIRE_CONTEXT_FLAG_FORCE_RESET;
+
+  render_context =
+    grd_rdp_renderer_try_acquire_render_context (renderer, rdp_surface,
+                                                 acquire_flags);
   if (!render_context)
     return G_SOURCE_CONTINUE;
+
+  surface_renderer->pending_render_context_reset = FALSE;
 
   maybe_encode_pending_frame (surface_renderer, render_context);
   grd_rdp_renderer_release_render_context (renderer, render_context);
@@ -192,6 +340,7 @@ GrdRdpSurfaceRenderer *
 grd_rdp_surface_renderer_new (GrdRdpSurface  *rdp_surface,
                               GrdRdpRenderer *renderer,
                               GrdSessionRdp  *session_rdp,
+                              GrdVkDevice    *vk_device,
                               uint32_t        refresh_rate)
 {
   GMainContext *graphics_context =
@@ -203,6 +352,7 @@ grd_rdp_surface_renderer_new (GrdRdpSurface  *rdp_surface,
   surface_renderer->rdp_surface = rdp_surface;
   surface_renderer->renderer = renderer;
   surface_renderer->session_rdp = session_rdp;
+  surface_renderer->vk_device = vk_device;
   surface_renderer->refresh_rate = refresh_rate;
 
   render_source = g_source_new (&render_source_funcs, sizeof (GSource));
@@ -226,6 +376,9 @@ grd_rdp_surface_renderer_dispose (GObject *object)
       g_clear_pointer (&surface_renderer->render_source, g_source_unref);
     }
 
+  g_clear_pointer (&surface_renderer->registered_buffers, g_hash_table_unref);
+  g_clear_pointer (&surface_renderer->rdp_buffer_info, g_free);
+
   G_OBJECT_CLASS (grd_rdp_surface_renderer_parent_class)->dispose (object);
 }
 
@@ -242,6 +395,10 @@ grd_rdp_surface_renderer_finalize (GObject *object)
 static void
 grd_rdp_surface_renderer_init (GrdRdpSurfaceRenderer *surface_renderer)
 {
+  surface_renderer->registered_buffers =
+    g_hash_table_new_full (NULL, NULL,
+                           NULL, g_object_unref);
+
   g_mutex_init (&surface_renderer->render_mutex);
 }
 

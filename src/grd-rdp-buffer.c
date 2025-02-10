@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Pascal Nowack
+ * Copyright (C) 2024 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -21,281 +21,120 @@
 
 #include "grd-rdp-buffer.h"
 
-#include "grd-egl-thread.h"
-#include "grd-hwaccel-nvidia.h"
-#include "grd-rdp-buffer-pool.h"
-#include "grd-utils.h"
+#include <drm_fourcc.h>
 
-typedef struct
-{
-  GrdHwAccelNvidia *hwaccel_nvidia;
-  CUgraphicsResource cuda_resource;
-  CUstream cuda_stream;
-  gboolean is_mapped;
-} ClearBufferData;
-
-typedef struct
-{
-  GrdHwAccelNvidia *hwaccel_nvidia;
-  GrdRdpBuffer *rdp_buffer;
-} AllocateBufferData;
-
-typedef struct
-{
-  GrdHwAccelNvidia *hwaccel_nvidia;
-  CUgraphicsResource cuda_resource;
-  CUstream cuda_stream;
-} UnmapBufferData;
+#include "grd-rdp-buffer-info.h"
+#include "grd-rdp-pw-buffer.h"
+#include "grd-rdp-surface.h"
+#include "grd-vk-utils.h"
 
 struct _GrdRdpBuffer
 {
-  GrdRdpBufferPool *buffer_pool;
+  GObject parent;
 
-  GrdEglThread *egl_thread;
-  GrdHwAccelNvidia *hwaccel_nvidia;
-
-  uint32_t stride;
-
-  uint8_t *local_data;
-
-  uint32_t pbo;
-
-  CUgraphicsResource cuda_resource;
-  CUstream cuda_stream;
-  CUdeviceptr mapped_cuda_pointer;
+  GrdVkImage *dma_buf_image;
 };
 
+G_DEFINE_TYPE (GrdRdpBuffer, grd_rdp_buffer, G_TYPE_OBJECT)
+
 static gboolean
-cuda_allocate_buffer (gpointer user_data,
-                      uint32_t pbo)
+get_vk_format_from_drm_format (uint32_t   drm_format,
+                               VkFormat  *vk_format,
+                               GError   **error)
 {
-  AllocateBufferData *data = user_data;
-  GrdRdpBuffer *rdp_buffer = data->rdp_buffer;
-  gboolean success;
+  *vk_format = VK_FORMAT_UNDEFINED;
 
-  success = grd_hwaccel_nvidia_register_read_only_gl_buffer (data->hwaccel_nvidia,
-                                                             &rdp_buffer->cuda_resource,
-                                                             pbo);
-  if (success)
-    rdp_buffer->pbo = pbo;
+  switch (drm_format)
+    {
+    case DRM_FORMAT_ARGB8888:
+    case DRM_FORMAT_XRGB8888:
+      *vk_format = VK_FORMAT_B8G8R8A8_UNORM;
+      return TRUE;
+    }
 
-  return success;
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+               "No VkFormat available for DRM format 0x%08X", drm_format);
+
+  return FALSE;
 }
 
-static void
-resources_ready (gboolean success,
-                 gpointer user_data)
+static gboolean
+import_dma_buf_image (GrdRdpBuffer      *rdp_buffer,
+                      GrdRdpPwBuffer    *rdp_pw_buffer,
+                      GrdRdpBufferInfo  *rdp_buffer_info,
+                      GrdRdpSurface     *rdp_surface,
+                      GrdVkDevice       *vk_device,
+                      GError           **error)
 {
-  GrdSyncPoint *sync_point = user_data;
+  uint32_t surface_width = grd_rdp_surface_get_width (rdp_surface);
+  uint32_t surface_height = grd_rdp_surface_get_height (rdp_surface);
+  const GrdRdpPwBufferDmaBufInfo *dma_buf_info =
+    grd_rdp_pw_buffer_get_dma_buf_info (rdp_pw_buffer);
+  VkFormat vk_format = VK_FORMAT_UNDEFINED;
 
-  if (success)
-    g_debug ("[RDP] Allocating GL resources was successful");
-  else
-    g_warning ("[RDP] Failed to allocate GL resources");
+  if (!get_vk_format_from_drm_format (rdp_buffer_info->drm_format, &vk_format,
+                                      error))
+    return FALSE;
 
-  grd_sync_point_complete (sync_point, success);
+  rdp_buffer->dma_buf_image =
+    grd_vk_dma_buf_image_new (vk_device, vk_format,
+                              surface_width, surface_height,
+                              VK_IMAGE_USAGE_SAMPLED_BIT,
+                              dma_buf_info->fd,
+                              dma_buf_info->offset,
+                              dma_buf_info->stride,
+                              rdp_buffer_info->drm_format_modifier,
+                              error);
+  if (!rdp_buffer->dma_buf_image)
+    return FALSE;
+
+  return TRUE;
 }
 
 GrdRdpBuffer *
-grd_rdp_buffer_new (GrdRdpBufferPool *buffer_pool,
-                    GrdEglThread     *egl_thread,
-                    GrdHwAccelNvidia *hwaccel_nvidia,
-                    CUstream          cuda_stream,
-                    uint32_t          height,
-                    uint32_t          stride,
-                    gboolean          preallocate_on_gpu)
+grd_rdp_buffer_new (GrdRdpPwBuffer    *rdp_pw_buffer,
+                    GrdRdpBufferInfo  *rdp_buffer_info,
+                    GrdRdpSurface     *rdp_surface,
+                    GrdVkDevice       *vk_device,
+                    GError           **error)
 {
   g_autoptr (GrdRdpBuffer) rdp_buffer = NULL;
-  gboolean success = TRUE;
+  GrdRdpBufferType buffer_type;
 
-  rdp_buffer = g_new0 (GrdRdpBuffer, 1);
-  rdp_buffer->buffer_pool = buffer_pool;
-  rdp_buffer->egl_thread = egl_thread;
-  rdp_buffer->hwaccel_nvidia = hwaccel_nvidia;
+  rdp_buffer = g_object_new (GRD_TYPE_RDP_BUFFER, NULL);
 
-  rdp_buffer->cuda_stream = cuda_stream;
-
-  rdp_buffer->stride = stride;
-  rdp_buffer->local_data = g_malloc0 (stride * height * sizeof (uint8_t));
-
-  if (preallocate_on_gpu &&
-      rdp_buffer->hwaccel_nvidia)
+  buffer_type = grd_rdp_pw_buffer_get_buffer_type (rdp_pw_buffer);
+  if (buffer_type == GRD_RDP_BUFFER_TYPE_DMA_BUF &&
+      vk_device &&
+      rdp_buffer_info->drm_format_modifier != DRM_FORMAT_MOD_INVALID)
     {
-      AllocateBufferData data = {};
-      GrdSyncPoint sync_point = {};
-
-      g_assert (rdp_buffer->egl_thread);
-
-      grd_sync_point_init (&sync_point);
-      data.hwaccel_nvidia = rdp_buffer->hwaccel_nvidia;
-      data.rdp_buffer = rdp_buffer;
-
-      grd_egl_thread_allocate (rdp_buffer->egl_thread,
-                               height,
-                               stride,
-                               cuda_allocate_buffer,
-                               &data,
-                               resources_ready,
-                               &sync_point,
-                               NULL);
-
-      success = grd_sync_point_wait_for_completion (&sync_point);
-      grd_sync_point_clear (&sync_point);
+      if (!import_dma_buf_image (rdp_buffer, rdp_pw_buffer, rdp_buffer_info,
+                                 rdp_surface, vk_device, error))
+        return NULL;
     }
-
-  if (!success)
-    return NULL;
 
   return g_steal_pointer (&rdp_buffer);
 }
 
 static void
-cuda_deallocate_buffer (gpointer user_data)
+grd_rdp_buffer_dispose (GObject *object)
 {
-  ClearBufferData *data = user_data;
+  GrdRdpBuffer *rdp_buffer = GRD_RDP_BUFFER (object);
 
-  if (data->is_mapped)
-    {
-      grd_hwaccel_nvidia_unmap_cuda_resource (data->hwaccel_nvidia,
-                                              data->cuda_resource,
-                                              data->cuda_stream);
-    }
+  g_clear_object (&rdp_buffer->dma_buf_image);
 
-  grd_hwaccel_nvidia_unregister_cuda_resource (data->hwaccel_nvidia,
-                                               data->cuda_resource,
-                                               data->cuda_stream);
+  G_OBJECT_CLASS (grd_rdp_buffer_parent_class)->dispose (object);
 }
 
-void
-grd_rdp_buffer_free (GrdRdpBuffer *rdp_buffer)
+static void
+grd_rdp_buffer_init (GrdRdpBuffer *rdp_buffer)
 {
-  if (rdp_buffer->cuda_resource)
-    {
-      ClearBufferData *data;
-
-      data = g_new0 (ClearBufferData, 1);
-      data->hwaccel_nvidia = rdp_buffer->hwaccel_nvidia;
-      data->cuda_resource = rdp_buffer->cuda_resource;
-      data->cuda_stream = rdp_buffer->cuda_stream;
-      data->is_mapped = !!rdp_buffer->mapped_cuda_pointer;
-      grd_egl_thread_deallocate (rdp_buffer->egl_thread,
-                                 rdp_buffer->pbo,
-                                 cuda_deallocate_buffer,
-                                 data,
-                                 NULL, data, g_free);
-
-      rdp_buffer->mapped_cuda_pointer = 0;
-      rdp_buffer->cuda_resource = NULL;
-      rdp_buffer->pbo = 0;
-    }
-
-  g_clear_pointer (&rdp_buffer->local_data, g_free);
-
-  g_free (rdp_buffer);
 }
 
-uint32_t
-grd_rdp_buffer_get_stride (GrdRdpBuffer *rdp_buffer)
+static void
+grd_rdp_buffer_class_init (GrdRdpBufferClass *klass)
 {
-  return rdp_buffer->stride;
-}
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-uint8_t *
-grd_rdp_buffer_get_local_data (GrdRdpBuffer *rdp_buffer)
-{
-  return rdp_buffer->local_data;
-}
-
-uint32_t
-grd_rdp_buffer_get_pbo (GrdRdpBuffer *rdp_buffer)
-{
-  return rdp_buffer->pbo;
-}
-
-CUdeviceptr
-grd_rdp_buffer_get_mapped_cuda_pointer (GrdRdpBuffer *rdp_buffer)
-{
-  return rdp_buffer->mapped_cuda_pointer;
-}
-
-void
-grd_rdp_buffer_release (GrdRdpBuffer *rdp_buffer)
-{
-  grd_rdp_buffer_pool_release_buffer (rdp_buffer->buffer_pool, rdp_buffer);
-}
-
-gboolean
-grd_rdp_buffer_register_read_only_gl_buffer (GrdRdpBuffer *rdp_buffer,
-                                             uint32_t      pbo)
-{
-  gboolean success;
-
-  success =
-    grd_hwaccel_nvidia_register_read_only_gl_buffer (rdp_buffer->hwaccel_nvidia,
-                                                     &rdp_buffer->cuda_resource,
-                                                     pbo);
-  if (success)
-    rdp_buffer->pbo = pbo;
-
-  return success;
-}
-
-gboolean
-grd_rdp_buffer_map_cuda_resource (GrdRdpBuffer *rdp_buffer)
-{
-  size_t mapped_size = 0;
-
-  return grd_hwaccel_nvidia_map_cuda_resource (rdp_buffer->hwaccel_nvidia,
-                                               rdp_buffer->cuda_resource,
-                                               &rdp_buffer->mapped_cuda_pointer,
-                                               &mapped_size,
-                                               rdp_buffer->cuda_stream);
-}
-
-void
-grd_rdp_buffer_unmap_cuda_resource (GrdRdpBuffer *rdp_buffer)
-{
-  if (!rdp_buffer->mapped_cuda_pointer)
-    return;
-
-  grd_hwaccel_nvidia_unmap_cuda_resource (rdp_buffer->hwaccel_nvidia,
-                                          rdp_buffer->cuda_resource,
-                                          rdp_buffer->cuda_stream);
-  rdp_buffer->mapped_cuda_pointer = 0;
-}
-
-static gboolean
-cuda_unmap_resource (gpointer user_data)
-{
-  UnmapBufferData *data = user_data;
-
-  grd_hwaccel_nvidia_unmap_cuda_resource (data->hwaccel_nvidia,
-                                          data->cuda_resource,
-                                          data->cuda_stream);
-
-  return TRUE;
-}
-
-void
-grd_rdp_buffer_queue_resource_unmap (GrdRdpBuffer *rdp_buffer)
-{
-  UnmapBufferData *data;
-
-  if (!rdp_buffer->mapped_cuda_pointer)
-    return;
-
-  data = g_new0 (UnmapBufferData, 1);
-  data->hwaccel_nvidia = rdp_buffer->hwaccel_nvidia;
-  data->cuda_resource = rdp_buffer->cuda_resource;
-  data->cuda_stream = rdp_buffer->cuda_stream;
-  grd_egl_thread_run_custom_task (rdp_buffer->egl_thread,
-                                  cuda_unmap_resource,
-                                  data,
-                                  NULL, data, g_free);
-
-  /*
-   * The mapped CUDA pointer indicates whether the resource is mapped, but
-   * it is itself not needed to unmap the resource.
-   */
-  rdp_buffer->mapped_cuda_pointer = 0;
+  object_class->dispose = grd_rdp_buffer_dispose;
 }

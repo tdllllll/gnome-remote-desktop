@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015,2022 Red Hat Inc.
+ * Copyright (C) 2022 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -15,20 +15,24 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
  * 02111-1307, USA.
- *
  */
 
-#ifndef GRD_DEBUG_H
-#define GRD_DEBUG_H
+#ifndef GRD_HWACCEL_VULKAN_H
+#define GRD_HWACCEL_VULKAN_H
 
-typedef enum _GrdDebugFlags
-{
-  GRD_DEBUG_NONE = 0,
-  GRD_DEBUG_VNC = 1 << 0,
-  GRD_DEBUG_TPM = 1 << 1,
-  GRD_DEBUG_VK_VALIDATION = 1 << 2,
-} GrdDebugFlags;
+#include <glib-object.h>
 
-GrdDebugFlags grd_get_debug_flags (void);
+#include "grd-vk-device.h"
+#include "grd-types.h"
 
-#endif /* GRD_DEBUG_H */
+#define GRD_TYPE_HWACCEL_VULKAN (grd_hwaccel_vulkan_get_type ())
+G_DECLARE_FINAL_TYPE (GrdHwAccelVulkan, grd_hwaccel_vulkan,
+                      GRD, HWACCEL_VULKAN, GObject)
+
+GrdHwAccelVulkan *grd_hwaccel_vulkan_new (GrdEglThread  *egl_thread,
+                                          GError       **error);
+
+GrdVkDevice *grd_hwaccel_vulkan_acquire_device (GrdHwAccelVulkan  *hwaccel_vulkan,
+                                                GError           **error);
+
+#endif /* GRD_HWACCEL_VULKAN_H */

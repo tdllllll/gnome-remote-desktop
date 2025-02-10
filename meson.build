@@ -1,5 +1,5 @@
 project('gnome-remote-desktop', 'c',
-        version: '47.3',
+        version: '48.alpha',
         meson_version: '>= 0.58.0',
         default_options: ['warning_level=1',
                           'buildtype=debugoptimized'])
@@ -9,6 +9,7 @@ epoxy_req = '>= 1.4'
 freerdp_req = '>= 3.1.0'
 fuse_req = '>= 3.9.1'
 polkit_req = '>= 122'
+vulkan_req = '>= 1.2.0'
 xkbcommon_req = '>= 1.0.0'
 libei_req = '>= 1.2.0'
 
@@ -28,7 +29,7 @@ libei_dep = dependency('libei-1.0', version: libei_req)
 libnotify_dep = dependency('libnotify')
 libsecret_dep = dependency('libsecret-1')
 libsystemd_dep = dependency('libsystemd', required: false)
-pipewire_dep = dependency('libpipewire-0.3', version: '>= 0.3.49')
+pipewire_dep = dependency('libpipewire-0.3', version: '>= 1.2.0')
 systemd_dep = dependency('systemd', required: get_option('systemd'))
 tss2_esys_dep = dependency('tss2-esys')
 tss2_mu_dep = dependency('tss2-mu')
@@ -54,9 +55,15 @@ if have_rdp
   freerdp_client_dep = dependency('freerdp-client3', version: freerdp_req)
   freerdp_server_dep = dependency('freerdp-server3', version: freerdp_req)
   fuse_dep = dependency('fuse3', version: fuse_req)
+  libva_dep = dependency('libva')
+  libva_drm_dep = dependency('libva-drm')
   opus_dep = dependency('opus')
   polkit_dep = dependency('polkit-gobject-1', version: polkit_req)
+  vulkan_dep = dependency('vulkan', version: vulkan_req)
   winpr_dep = dependency('winpr3', version: freerdp_req)
+
+  glslc = find_program('glslc', required: true)
+  spirv_opt = find_program('spirv-opt', required: true)
 endif
 
 if have_vnc

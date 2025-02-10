@@ -31,10 +31,10 @@
 #include "grd-context.h"
 #include "grd-egl-thread.h"
 #include "grd-pipewire-utils.h"
-#include "grd-rdp-buffer.h"
 #include "grd-rdp-buffer-pool.h"
 #include "grd-rdp-cursor-renderer.h"
 #include "grd-rdp-damage-detector.h"
+#include "grd-rdp-legacy-buffer.h"
 #include "grd-rdp-pw-buffer.h"
 #include "grd-rdp-session-metrics.h"
 #include "grd-rdp-surface.h"
@@ -66,7 +66,7 @@ struct _GrdRdpFrame
 {
   gatomicrefcount refcount;
 
-  GrdRdpBuffer *buffer;
+  GrdRdpLegacyBuffer *buffer;
 
   GrdRdpPipeWireStream *stream;
   GrdRdpFrameReadyCallback callback;
@@ -75,26 +75,18 @@ struct _GrdRdpFrame
 
 typedef struct
 {
-  GrdRdpBuffer *rdp_buffer;
+  GrdRdpLegacyBuffer *rdp_legacy_buffer;
 } UnmapBufferData;
 
 typedef struct
 {
-  GrdRdpBuffer *rdp_buffer;
+  GrdRdpLegacyBuffer *rdp_legacy_buffer;
 } AllocateBufferData;
 
 typedef struct
 {
-  GrdRdpBuffer *rdp_buffer;
+  GrdRdpLegacyBuffer *rdp_legacy_buffer;
 } RealizeBufferData;
-
-typedef struct
-{
-  AllocateBufferData allocate;
-  RealizeBufferData realize;
-
-  GrdRdpBuffer *rdp_buffer;
-} ImportBufferData;
 
 struct _GrdRdpPipeWireStream
 {
@@ -123,6 +115,7 @@ struct _GrdRdpPipeWireStream
   struct spa_hook pipewire_stream_listener;
 
   GHashTable *pipewire_buffers;
+  gboolean ignore_new_buffers;
 
   uint32_t src_node_id;
 
@@ -192,7 +185,7 @@ grd_rdp_frame_unref (GrdRdpFrame *frame)
 {
   if (g_atomic_ref_count_dec (&frame->refcount))
     {
-      g_clear_pointer (&frame->buffer, grd_rdp_buffer_release);
+      g_clear_pointer (&frame->buffer, grd_rdp_legacy_buffer_release);
       g_free (frame);
     }
 }
@@ -496,6 +489,7 @@ static void
 handle_graphics_subsystem_failure (GrdRdpPipeWireStream *stream)
 {
   stream->dequeuing_disallowed = TRUE;
+  stream->ignore_new_buffers = TRUE;
 
   grd_session_rdp_notify_error (stream->session_rdp,
                                 GRD_SESSION_RDP_ERROR_GRAPHICS_SUBSYSTEM_FAILED);
@@ -506,13 +500,34 @@ on_stream_add_buffer (void             *user_data,
                       struct pw_buffer *buffer)
 {
   GrdRdpPipeWireStream *stream = user_data;
+  GrdRdpSurfaceRenderer *surface_renderer;
   GrdRdpPwBuffer *rdp_pw_buffer;
   g_autoptr (GError) error = NULL;
+  uint32_t drm_format;
+  int bpp;
+
+  if (stream->ignore_new_buffers)
+    return;
 
   rdp_pw_buffer = grd_rdp_pw_buffer_new (buffer, &error);
   if (!rdp_pw_buffer)
     {
       g_warning ("[RDP] Failed to add PipeWire buffer: %s", error->message);
+      handle_graphics_subsystem_failure (stream);
+      return;
+    }
+
+  grd_get_spa_format_details (stream->spa_format.format,
+                              &drm_format, &bpp);
+
+  surface_renderer = grd_rdp_surface_get_surface_renderer (stream->rdp_surface);
+  if (!grd_rdp_surface_renderer_register_pw_buffer (surface_renderer,
+                                                    rdp_pw_buffer,
+                                                    drm_format,
+                                                    stream->spa_format.modifier,
+                                                    &error))
+    {
+      g_warning ("[RDP] Failed to register PipeWire buffer: %s", error->message);
       handle_graphics_subsystem_failure (stream);
       return;
     }
@@ -525,6 +540,7 @@ on_stream_remove_buffer (void             *user_data,
                          struct pw_buffer *buffer)
 {
   GrdRdpPipeWireStream *stream = user_data;
+  GrdRdpSurfaceRenderer *surface_renderer;
   GrdRdpPwBuffer *rdp_pw_buffer = NULL;
   g_autoptr (GMutexLocker) locker = NULL;
 
@@ -534,6 +550,10 @@ on_stream_remove_buffer (void             *user_data,
 
   locker = g_mutex_locker_new (&stream->dequeue_mutex);
   grd_rdp_pw_buffer_ensure_unlocked (rdp_pw_buffer);
+
+  surface_renderer = grd_rdp_surface_get_surface_renderer (stream->rdp_surface);
+  grd_rdp_surface_renderer_unregister_pw_buffer (surface_renderer,
+                                                 rdp_pw_buffer);
 
   g_hash_table_remove (stream->pipewire_buffers, rdp_pw_buffer);
 }
@@ -618,8 +638,8 @@ on_frame_ready (GrdRdpPipeWireStream *stream,
     }
 
   surface_renderer = grd_rdp_surface_get_surface_renderer (rdp_surface);
-  grd_rdp_surface_renderer_submit_buffer (surface_renderer,
-                                          g_steal_pointer (&frame->buffer));
+  grd_rdp_surface_renderer_submit_legacy_buffer (surface_renderer,
+                                                 g_steal_pointer (&frame->buffer));
 out:
   pw_stream_queue_buffer (stream->pipewire_stream, buffer);
   maybe_release_pipewire_buffer_lock (stream, buffer);
@@ -636,12 +656,12 @@ copy_frame_data (GrdRdpFrame *frame,
                  int          src_stride,
                  int          bpp)
 {
-  GrdRdpBuffer *buffer = frame->buffer;
+  GrdRdpLegacyBuffer *buffer = frame->buffer;
   int y;
 
   for (y = 0; y < height; ++y)
     {
-      memcpy (grd_rdp_buffer_get_local_data (buffer) + y * dst_stride,
+      memcpy (grd_rdp_legacy_buffer_get_local_data (buffer) + y * dst_stride,
               ((uint8_t *) src_data) + y * src_stride,
               width * 4);
     }
@@ -652,19 +672,19 @@ cuda_unmap_resource (gpointer user_data)
 {
   UnmapBufferData *data = user_data;
 
-  grd_rdp_buffer_unmap_cuda_resource (data->rdp_buffer);
+  grd_rdp_legacy_buffer_unmap_cuda_resource (data->rdp_legacy_buffer);
 
   return TRUE;
 }
 
 static void
-unmap_cuda_resources (GrdEglThread *egl_thread,
-                      GrdRdpBuffer *rdp_buffer)
+unmap_cuda_resources (GrdEglThread       *egl_thread,
+                      GrdRdpLegacyBuffer *rdp_legacy_buffer)
 {
   UnmapBufferData *data;
 
   data = g_new0 (UnmapBufferData, 1);
-  data->rdp_buffer = rdp_buffer;
+  data->rdp_legacy_buffer = rdp_legacy_buffer;
 
   grd_egl_thread_run_custom_task (egl_thread,
                                   cuda_unmap_resource, data,
@@ -676,35 +696,18 @@ cuda_allocate_buffer (gpointer user_data,
                       uint32_t pbo)
 {
   AllocateBufferData *data = user_data;
-  GrdRdpBuffer *rdp_buffer = data->rdp_buffer;
+  GrdRdpLegacyBuffer *rdp_legacy_buffer = data->rdp_legacy_buffer;
 
-  return grd_rdp_buffer_register_read_only_gl_buffer (rdp_buffer, pbo);
-}
-
-static gboolean
-allocate_buffer (gpointer user_data,
-                 uint32_t pbo)
-{
-  ImportBufferData *data = user_data;
-
-  return cuda_allocate_buffer (&data->allocate, pbo);
+  return grd_rdp_legacy_buffer_register_read_only_gl_buffer (rdp_legacy_buffer, pbo);
 }
 
 static gboolean
 cuda_map_resource (gpointer user_data)
 {
   RealizeBufferData *data = user_data;
-  GrdRdpBuffer *rdp_buffer = data->rdp_buffer;
+  GrdRdpLegacyBuffer *rdp_legacy_buffer = data->rdp_legacy_buffer;
 
-  return grd_rdp_buffer_map_cuda_resource (rdp_buffer);
-}
-
-static gboolean
-realize_buffer (gpointer user_data)
-{
-  ImportBufferData *data = user_data;
-
-  return cuda_map_resource (&data->realize);
+  return grd_rdp_legacy_buffer_map_cuda_resource (rdp_legacy_buffer);
 }
 
 static void
@@ -748,7 +751,7 @@ process_frame_data (GrdRdpPipeWireStream *stream,
       GrdRdpPwBuffer *rdp_pw_buffer = NULL;
       AllocateBufferData *allocate_buffer_data;
       RealizeBufferData *realize_buffer_data;
-      GrdRdpBuffer *rdp_buffer;
+      GrdRdpLegacyBuffer *rdp_legacy_buffer;
       void *src_data;
       uint32_t pbo;
       uint8_t *data_to_upload;
@@ -768,9 +771,9 @@ process_frame_data (GrdRdpPipeWireStream *stream,
           grd_rdp_frame_invoke_callback (g_steal_pointer (&frame), FALSE);
           return;
         }
-      rdp_buffer = frame->buffer;
-      dst_stride = grd_rdp_buffer_get_stride (rdp_buffer);
-      pbo = grd_rdp_buffer_get_pbo (rdp_buffer);
+      rdp_legacy_buffer = frame->buffer;
+      dst_stride = grd_rdp_legacy_buffer_get_stride (rdp_legacy_buffer);
+      pbo = grd_rdp_legacy_buffer_get_pbo (rdp_legacy_buffer);
 
       if (stream->rdp_surface->needs_no_local_data &&
           src_stride == dst_stride)
@@ -786,7 +789,7 @@ process_frame_data (GrdRdpPipeWireStream *stream,
                            src_stride,
                            bpp);
 
-          data_to_upload = grd_rdp_buffer_get_local_data (rdp_buffer);
+          data_to_upload = grd_rdp_legacy_buffer_get_local_data (rdp_legacy_buffer);
         }
 
       if (!hwaccel_nvidia)
@@ -795,13 +798,13 @@ process_frame_data (GrdRdpPipeWireStream *stream,
           return;
         }
 
-      unmap_cuda_resources (egl_thread, rdp_buffer);
+      unmap_cuda_resources (egl_thread, rdp_legacy_buffer);
 
       allocate_buffer_data = g_new0 (AllocateBufferData, 1);
-      allocate_buffer_data->rdp_buffer = rdp_buffer;
+      allocate_buffer_data->rdp_legacy_buffer = rdp_legacy_buffer;
 
       realize_buffer_data = g_new0 (RealizeBufferData, 1);
-      realize_buffer_data->rdp_buffer = rdp_buffer;
+      realize_buffer_data->rdp_legacy_buffer = rdp_legacy_buffer;
 
       grd_egl_thread_upload (egl_thread,
                              stream->egl_slot,
@@ -824,10 +827,7 @@ process_frame_data (GrdRdpPipeWireStream *stream,
       GrdSession *session = GRD_SESSION (stream->session_rdp);
       GrdContext *context = grd_session_get_context (session);
       GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
-      GrdHwAccelNvidia *hwaccel_nvidia = stream->rdp_surface->hwaccel_nvidia;
-      GrdEglThreadImportIface iface;
-      ImportBufferData *import_buffer_data = NULL;
-      GrdRdpBuffer *rdp_buffer;
+      GrdRdpLegacyBuffer *rdp_legacy_buffer;
       int row_width;
       int *fds;
       uint32_t *offsets;
@@ -846,8 +846,8 @@ process_frame_data (GrdRdpPipeWireStream *stream,
           grd_rdp_frame_invoke_callback (g_steal_pointer (&frame), FALSE);
           return;
         }
-      rdp_buffer = frame->buffer;
-      dst_stride = grd_rdp_buffer_get_stride (rdp_buffer);
+      rdp_legacy_buffer = frame->buffer;
+      dst_stride = grd_rdp_legacy_buffer_get_stride (rdp_legacy_buffer);
 
       row_width = dst_stride / bpp;
 
@@ -868,30 +868,10 @@ process_frame_data (GrdRdpPipeWireStream *stream,
         }
 
       if (!stream->rdp_surface->needs_no_local_data)
-        dst_data = grd_rdp_buffer_get_local_data (frame->buffer);
-
-      if (hwaccel_nvidia)
-        {
-          unmap_cuda_resources (egl_thread, rdp_buffer);
-
-          iface.allocate = allocate_buffer;
-          iface.realize = realize_buffer;
-
-          import_buffer_data = g_new0 (ImportBufferData, 1);
-          import_buffer_data->allocate.rdp_buffer = rdp_buffer;
-          import_buffer_data->realize.rdp_buffer = rdp_buffer;
-
-          import_buffer_data->rdp_buffer = rdp_buffer;
-        }
+        dst_data = grd_rdp_legacy_buffer_get_local_data (frame->buffer);
 
       grd_egl_thread_download (egl_thread,
                                stream->egl_slot,
-                               grd_rdp_buffer_get_pbo (rdp_buffer),
-                               height,
-                               dst_stride,
-                               hwaccel_nvidia ? &iface : NULL,
-                               import_buffer_data,
-                               g_free,
                                dst_data,
                                row_width,
                                drm_format,

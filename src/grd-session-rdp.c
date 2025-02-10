@@ -104,6 +104,7 @@ struct _GrdSessionRdp
 
   GrdRdpEventQueue *rdp_event_queue;
 
+  GrdHwAccelVulkan *hwaccel_vulkan;
   GrdHwAccelNvidia *hwaccel_nvidia;
 
   GrdRdpLayoutManager *layout_manager;
@@ -1439,6 +1440,7 @@ on_view_only_changed (GrdSettings   *settings,
 GrdSessionRdp *
 grd_session_rdp_new (GrdRdpServer      *rdp_server,
                      GSocketConnection *connection,
+                     GrdHwAccelVulkan  *hwaccel_vulkan,
                      GrdHwAccelNvidia  *hwaccel_nvidia)
 {
   g_autoptr (GrdSessionRdp) session_rdp = NULL;
@@ -1467,6 +1469,7 @@ grd_session_rdp_new (GrdRdpServer      *rdp_server,
                               NULL);
 
   session_rdp->connection = g_object_ref (connection);
+  session_rdp->hwaccel_vulkan = hwaccel_vulkan;
   session_rdp->hwaccel_nvidia = hwaccel_nvidia;
 
   g_object_get (G_OBJECT (settings),
@@ -1487,7 +1490,6 @@ grd_session_rdp_new (GrdRdpServer      *rdp_server,
   if (!init_rdp_session (session_rdp, username, password, &error))
     {
       g_warning ("[RDP] Couldn't initialize session: %s", error->message);
-      g_clear_object (&session_rdp->connection);
       g_free (password);
       g_free (username);
       return NULL;
@@ -1704,11 +1706,17 @@ grd_session_rdp_remote_desktop_session_started (GrdSession *session)
   RdpPeerContext *rdp_peer_context = (RdpPeerContext *) rdp_context;
   GrdRdpGraphicsPipeline *graphics_pipeline = rdp_peer_context->graphics_pipeline;
 
+  if (!grd_rdp_renderer_start (session_rdp->renderer,
+                               session_rdp->hwaccel_vulkan,
+                               graphics_pipeline, rdp_context))
+    {
+      grd_session_rdp_notify_error (session_rdp,
+                                    GRD_SESSION_RDP_ERROR_CLOSE_STACK_ON_DRIVER_FAILURE);
+      return;
+    }
+
   grd_rdp_session_metrics_notify_phase_completion (session_rdp->session_metrics,
                                                    GRD_RDP_PHASE_SESSION_STARTED);
-
-  grd_rdp_renderer_notify_session_started (session_rdp->renderer,
-                                           graphics_pipeline, rdp_context);
   grd_rdp_layout_manager_notify_session_started (session_rdp->layout_manager,
                                                  session_rdp->cursor_renderer,
                                                  rdp_context);
@@ -1760,6 +1768,7 @@ grd_session_rdp_dispose (GObject *object)
 
   g_clear_object (&session_rdp->layout_manager);
   clear_rdp_peer (session_rdp);
+  g_clear_object (&session_rdp->connection);
 
   g_clear_object (&session_rdp->renderer);
 

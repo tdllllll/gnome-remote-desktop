@@ -22,6 +22,7 @@
 #include "grd-rdp-renderer.h"
 
 #include "grd-hwaccel-nvidia.h"
+#include "grd-hwaccel-vulkan.h"
 #include "grd-rdp-graphics-pipeline.h"
 #include "grd-rdp-private.h"
 #include "grd-rdp-render-context.h"
@@ -46,6 +47,7 @@ struct _GrdRdpRenderer
   gboolean in_shutdown;
 
   GrdSessionRdp *session_rdp;
+  GrdVkDevice *vk_device;
   GrdHwAccelNvidia *hwaccel_nvidia;
 
   GrdRdpGraphicsPipeline *graphics_pipeline;
@@ -146,17 +148,42 @@ graphics_thread_func (gpointer data)
   return NULL;
 }
 
-void
-grd_rdp_renderer_notify_session_started (GrdRdpRenderer         *renderer,
-                                         GrdRdpGraphicsPipeline *graphics_pipeline,
-                                         rdpContext             *rdp_context)
+static gboolean
+maybe_initialize_hardware_acceleration (GrdRdpRenderer   *renderer,
+                                        GrdHwAccelVulkan *hwaccel_vulkan)
+{
+  g_autoptr (GError) error = NULL;
+
+  renderer->vk_device = grd_hwaccel_vulkan_acquire_device (hwaccel_vulkan,
+                                                           &error);
+  if (!renderer->vk_device)
+    {
+      g_warning ("[RDP] Failed to acquire Vulkan device: %s",
+                 error->message);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+gboolean
+grd_rdp_renderer_start (GrdRdpRenderer         *renderer,
+                        GrdHwAccelVulkan       *hwaccel_vulkan,
+                        GrdRdpGraphicsPipeline *graphics_pipeline,
+                        rdpContext             *rdp_context)
 {
   renderer->graphics_pipeline = graphics_pipeline;
   renderer->rdp_context = rdp_context;
 
+  if (hwaccel_vulkan &&
+      !maybe_initialize_hardware_acceleration (renderer, hwaccel_vulkan))
+    return FALSE;
+
   renderer->graphics_thread = g_thread_new ("RDP graphics thread",
                                             graphics_thread_func,
                                             renderer);
+
+  return TRUE;
 }
 
 void
@@ -238,6 +265,7 @@ grd_rdp_renderer_try_acquire_surface (GrdRdpRenderer *renderer,
 
   surface_renderer = grd_rdp_surface_renderer_new (rdp_surface, renderer,
                                                    renderer->session_rdp,
+                                                   renderer->vk_device,
                                                    refresh_rate);
   grd_rdp_surface_attach_surface_renderer (rdp_surface, surface_renderer);
 
@@ -305,6 +333,34 @@ maybe_reset_graphics (GrdRdpRenderer *renderer)
   renderer->pending_gfx_graphics_reset = FALSE;
 }
 
+static void
+destroy_render_context_locked (GrdRdpRenderer *renderer,
+                               GrdRdpSurface  *rdp_surface)
+{
+  GrdRdpRenderContext *render_context = NULL;
+
+  if (!g_hash_table_lookup_extended (renderer->render_context_table,
+                                     rdp_surface,
+                                     NULL, (gpointer *) &render_context))
+    return;
+
+  g_assert (render_context);
+  g_assert (!g_hash_table_contains (renderer->acquired_render_contexts,
+                                    render_context));
+
+  g_hash_table_remove (renderer->render_context_table, rdp_surface);
+}
+
+static void
+destroy_render_context (GrdRdpRenderer *renderer,
+                        GrdRdpSurface  *rdp_surface)
+{
+  g_autoptr (GMutexLocker) locker = NULL;
+
+  locker = g_mutex_locker_new (&renderer->inhibition_mutex);
+  destroy_render_context_locked (renderer, rdp_surface);
+}
+
 static GrdRdpRenderContext *
 render_context_ref (GrdRdpRenderer      *renderer,
                     GrdRdpRenderContext *render_context)
@@ -358,8 +414,9 @@ handle_graphics_subsystem_failure (GrdRdpRenderer *renderer)
 }
 
 GrdRdpRenderContext *
-grd_rdp_renderer_try_acquire_render_context (GrdRdpRenderer *renderer,
-                                             GrdRdpSurface  *rdp_surface)
+grd_rdp_renderer_try_acquire_render_context (GrdRdpRenderer            *renderer,
+                                             GrdRdpSurface             *rdp_surface,
+                                             GrdRdpAcquireContextFlags  flags)
 {
   GrdRdpRenderContext *render_context = NULL;
   g_autoptr (GMutexLocker) locker = NULL;
@@ -372,6 +429,9 @@ grd_rdp_renderer_try_acquire_render_context (GrdRdpRenderer *renderer,
     return NULL;
 
   maybe_reset_graphics (renderer);
+
+  if (flags & GRD_RDP_ACQUIRE_CONTEXT_FLAG_FORCE_RESET)
+    destroy_render_context_locked (renderer, rdp_surface);
 
   if (g_hash_table_lookup_extended (renderer->render_context_table, rdp_surface,
                                     NULL, (gpointer *) &render_context))
@@ -431,11 +491,11 @@ gboolean
 grd_rdp_renderer_render_frame (GrdRdpRenderer      *renderer,
                                GrdRdpSurface       *rdp_surface,
                                GrdRdpRenderContext *render_context,
-                               GrdRdpBuffer        *rdp_buffer)
+                               GrdRdpLegacyBuffer  *buffer)
 {
   return grd_rdp_graphics_pipeline_refresh_gfx (renderer->graphics_pipeline,
                                                 rdp_surface, render_context,
-                                                rdp_buffer);
+                                                buffer);
 }
 
 GrdRdpRenderer *
@@ -449,27 +509,6 @@ grd_rdp_renderer_new (GrdSessionRdp    *session_rdp,
   renderer->hwaccel_nvidia = hwaccel_nvidia;
 
   return renderer;
-}
-
-static void
-destroy_render_context (GrdRdpRenderer *renderer,
-                        GrdRdpSurface  *rdp_surface)
-{
-  GrdRdpRenderContext *render_context = NULL;
-  g_autoptr (GMutexLocker) locker = NULL;
-
-  locker = g_mutex_locker_new (&renderer->inhibition_mutex);
-  if (!g_hash_table_lookup_extended (renderer->render_context_table,
-                                     rdp_surface,
-                                     NULL, (gpointer *) &render_context))
-    return;
-
-  g_assert (render_context);
-  if (g_hash_table_lookup_extended (renderer->acquired_render_contexts,
-                                    render_context, NULL, NULL))
-    g_assert_not_reached ();
-
-  g_hash_table_remove (renderer->render_context_table, rdp_surface);
 }
 
 static gboolean
@@ -517,6 +556,8 @@ grd_rdp_renderer_dispose (GObject *object)
   g_clear_pointer (&renderer->disposal_queue, g_async_queue_unref);
 
   g_assert (g_hash_table_size (renderer->surface_renderer_table) == 0);
+
+  g_clear_object (&renderer->vk_device);
 
   G_OBJECT_CLASS (grd_rdp_renderer_parent_class)->dispose (object);
 }
