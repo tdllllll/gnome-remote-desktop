@@ -1,3 +1,10 @@
+gnome-remote-desktop (48~alpha-3) UNRELEASED; urgency=medium
+
+  * debian/docs: install README.md since it explains how to configure
+    gnome-remote-desktop via the command line
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 16 Mar 2025 09:39:34 -0400
+
 gnome-remote-desktop (48~alpha-2) unstable; urgency=medium
 
   * Release to unstable
