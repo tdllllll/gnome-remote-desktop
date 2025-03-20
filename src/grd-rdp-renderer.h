@@ -33,6 +33,7 @@ typedef enum
 {
   GRD_RDP_ACQUIRE_CONTEXT_FLAG_NONE = 0,
   GRD_RDP_ACQUIRE_CONTEXT_FLAG_FORCE_RESET = 1 << 0,
+  GRD_RDP_ACQUIRE_CONTEXT_FLAG_RETAIN_OR_NULL = 1 << 1,
 } GrdRdpAcquireContextFlags;
 
 GrdRdpRenderer *grd_rdp_renderer_new (GrdSessionRdp    *session_rdp,
@@ -76,6 +77,10 @@ void grd_rdp_renderer_release_render_context (GrdRdpRenderer      *renderer,
                                               GrdRdpRenderContext *render_context);
 
 void grd_rdp_renderer_clear_render_contexts (GrdRdpRenderer *renderer);
+
+void grd_rdp_renderer_submit_frame (GrdRdpRenderer      *renderer,
+                                    GrdRdpRenderContext *render_context,
+                                    GrdRdpFrame         *rdp_frame);
 
 gboolean grd_rdp_renderer_render_frame (GrdRdpRenderer      *renderer,
                                         GrdRdpSurface       *rdp_surface,

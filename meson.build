@@ -1,5 +1,5 @@
 project('gnome-remote-desktop', 'c',
-        version: '48.alpha',
+        version: '48.0',
         meson_version: '>= 0.58.0',
         default_options: ['warning_level=1',
                           'buildtype=debugoptimized'])
@@ -57,6 +57,7 @@ if have_rdp
   fuse_dep = dependency('fuse3', version: fuse_req)
   libva_dep = dependency('libva')
   libva_drm_dep = dependency('libva-drm')
+  m_dep = cc.find_library('m')
   opus_dep = dependency('opus')
   polkit_dep = dependency('polkit-gobject-1', version: polkit_req)
   vulkan_dep = dependency('vulkan', version: vulkan_req)
@@ -86,6 +87,7 @@ dbus_system_services_dir = dbus_dep.get_variable(datadir / 'dbus-1' / 'system-se
                                                  pkgconfig_define: ['datadir', datadir])
 
 grd_datadir = join_paths(datadir, 'gnome-remote-desktop')
+grd_shaderdir = join_paths(grd_datadir, 'shaders')
 
 grd_confdir = get_option('conf_dir')
 if grd_confdir == ''
@@ -110,6 +112,7 @@ cdata.set_quoted('GRD_LIBEXEC_DIR', libexecdir)
 cdata.set_quoted('GRD_CUSTOM_CONF', grd_custom_conf)
 cdata.set_quoted('GRD_DEFAULT_CONF', grd_default_conf)
 cdata.set_quoted('GRD_USERNAME', grd_username)
+cdata.set_quoted('GRD_SHADER_DIR', grd_shaderdir)
 
 configure_file(input: 'config.h.meson',
                output: 'config.h',

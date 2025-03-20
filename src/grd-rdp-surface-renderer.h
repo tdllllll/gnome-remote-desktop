@@ -37,10 +37,15 @@ GrdRdpSurfaceRenderer *grd_rdp_surface_renderer_new (GrdRdpSurface  *rdp_surface
 
 uint32_t grd_rdp_surface_renderer_get_refresh_rate (GrdRdpSurfaceRenderer *surface_renderer);
 
-gboolean grd_rdp_surface_renderer_is_rendering_suspended (GrdRdpSurfaceRenderer *surface_renderer);
+GrdRdpBufferInfo *grd_rdp_surface_renderer_get_buffer_info (GrdRdpSurfaceRenderer *surface_renderer);
 
-void grd_rdp_surface_renderer_update_suspension_state (GrdRdpSurfaceRenderer *surface_renderer,
-                                                       gboolean               suspend_rendering);
+uint32_t grd_rdp_surface_renderer_get_total_frame_slots (GrdRdpSurfaceRenderer *surface_renderer);
+
+void grd_rdp_surface_renderer_update_total_frame_slots (GrdRdpSurfaceRenderer *surface_renderer,
+                                                        uint32_t               total_frame_slots);
+
+void grd_rdp_surface_renderer_notify_frame_upgrade_state (GrdRdpSurfaceRenderer *surface_renderer,
+                                                          gboolean               can_upgrade_frame);
 
 gboolean grd_rdp_surface_renderer_register_pw_buffer (GrdRdpSurfaceRenderer  *surface_renderer,
                                                       GrdRdpPwBuffer         *rdp_pw_buffer,
@@ -51,8 +56,15 @@ gboolean grd_rdp_surface_renderer_register_pw_buffer (GrdRdpSurfaceRenderer  *su
 void grd_rdp_surface_renderer_unregister_pw_buffer (GrdRdpSurfaceRenderer *surface_renderer,
                                                     GrdRdpPwBuffer        *rdp_pw_buffer);
 
+void grd_rdp_surface_renderer_submit_buffer (GrdRdpSurfaceRenderer *surface_renderer,
+                                             GrdRdpPwBuffer        *rdp_pw_buffer);
+
 void grd_rdp_surface_renderer_submit_legacy_buffer (GrdRdpSurfaceRenderer *surface_renderer,
                                                     GrdRdpLegacyBuffer    *buffer);
+
+void grd_rdp_surface_renderer_invalidate_surface (GrdRdpSurfaceRenderer *surface_renderer);
+
+void grd_rdp_surface_renderer_invalidate_surface_unlocked (GrdRdpSurfaceRenderer *surface_renderer);
 
 void grd_rdp_surface_renderer_trigger_render_source (GrdRdpSurfaceRenderer *surface_renderer);
 
