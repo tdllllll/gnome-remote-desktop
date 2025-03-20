@@ -29,6 +29,7 @@
 #include <spa/param/video/format-utils.h>
 
 #include "grd-context.h"
+#include "grd-debug.h"
 #include "grd-egl-thread.h"
 #include "grd-pipewire-utils.h"
 #include "grd-rdp-buffer-pool.h"
@@ -461,7 +462,7 @@ on_stream_param_changed (void                 *user_data,
   params[0] = spa_pod_builder_add_object (
     &pod_builder,
     SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
-    SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int (8, 1, 8),
+    SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int (8, 2, 8),
     SPA_PARAM_BUFFERS_dataType, SPA_POD_Int (allowed_buffer_types),
     0);
 
@@ -509,7 +510,8 @@ on_stream_add_buffer (void             *user_data,
   if (stream->ignore_new_buffers)
     return;
 
-  rdp_pw_buffer = grd_rdp_pw_buffer_new (buffer, &error);
+  rdp_pw_buffer = grd_rdp_pw_buffer_new (stream->pipewire_stream, buffer,
+                                         &error);
   if (!rdp_pw_buffer)
     {
       g_warning ("[RDP] Failed to add PipeWire buffer: %s", error->message);
@@ -892,6 +894,31 @@ process_frame_data (GrdRdpPipeWireStream *stream,
 }
 
 static void
+submit_framebuffer (GrdRdpPipeWireStream *stream,
+                    struct pw_buffer     *pw_buffer)
+{
+  GrdRdpSurface *rdp_surface = stream->rdp_surface;
+  GrdRdpSurfaceRenderer *surface_renderer =
+    grd_rdp_surface_get_surface_renderer (stream->rdp_surface);
+  GrdRdpPwBuffer *rdp_pw_buffer = NULL;
+
+  if (!stream->pending_resize)
+    {
+      GrdRdpSessionMetrics *session_metrics =
+        grd_session_rdp_get_session_metrics (stream->session_rdp);
+
+      grd_rdp_session_metrics_notify_frame_reception (session_metrics,
+                                                      rdp_surface);
+    }
+
+  if (!g_hash_table_lookup_extended (stream->pipewire_buffers, pw_buffer,
+                                     NULL, (gpointer *) &rdp_pw_buffer))
+    g_assert_not_reached ();
+
+  grd_rdp_surface_renderer_submit_buffer (surface_renderer, rdp_pw_buffer);
+}
+
+static void
 on_stream_process (void *user_data)
 {
   GrdRdpPipeWireStream *stream = GRD_RDP_PIPEWIRE_STREAM (user_data);
@@ -953,7 +980,11 @@ on_stream_process (void *user_data)
   if (!last_frame_buffer)
     return;
 
-  process_frame_data (stream, last_frame_buffer);
+  if (!(grd_get_debug_flags () & GRD_DEBUG_VKVA) ||
+      stream->rdp_surface->hwaccel_nvidia)
+    process_frame_data (stream, last_frame_buffer);
+  else
+    submit_framebuffer (stream, last_frame_buffer);
 }
 
 static const struct pw_stream_events stream_events = {

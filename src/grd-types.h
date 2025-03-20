@@ -23,14 +23,19 @@
 #ifndef GRD_TYPES_H
 #define GRD_TYPES_H
 
+typedef struct _GrdAVCFrameInfo GrdAVCFrameInfo;
+typedef struct _GrdBitstream GrdBitstream;
 typedef struct _GrdClipboard GrdClipboard;
 typedef struct _GrdClipboardRdp GrdClipboardRdp;
 typedef struct _GrdClipboardVnc GrdClipboardVnc;
 typedef struct _GrdContext GrdContext;
 typedef struct _GrdCredentials GrdCredentials;
 typedef struct _GrdEglThread GrdEglThread;
+typedef struct _GrdEncodeSession GrdEncodeSession;
 typedef struct _GrdHwAccelNvidia GrdHwAccelNvidia;
+typedef struct _GrdHwAccelVaapi GrdHwAccelVaapi;
 typedef struct _GrdHwAccelVulkan GrdHwAccelVulkan;
+typedef struct _GrdImageView GrdImageView;
 typedef struct _GrdRdpAudioInput GrdRdpAudioInput;
 typedef struct _GrdRdpAudioOutputStream GrdRdpAudioOutputStream;
 typedef struct _GrdRdpAudioPlayback GrdRdpAudioPlayback;
@@ -44,8 +49,11 @@ typedef struct _GrdRdpDamageDetector GrdRdpDamageDetector;
 typedef struct _GrdRdpDisplayControl GrdRdpDisplayControl;
 typedef struct _GrdRdpDvc GrdRdpDvc;
 typedef struct _GrdRdpEventQueue GrdRdpEventQueue;
+typedef struct _GrdRdpFrame GrdRdpFrame;
+typedef struct _GrdRdpFrameStats GrdRdpFrameStats;
 typedef struct _GrdRdpGfxFrameController GrdRdpGfxFrameController;
 typedef struct _GrdRdpGfxFrameLog GrdRdpGfxFrameLog;
+typedef struct _GrdRdpGfxFramerateLog GrdRdpGfxFramerateLog;
 typedef struct _GrdRdpGfxSurface GrdRdpGfxSurface;
 typedef struct _GrdRdpGraphicsPipeline GrdRdpGraphicsPipeline;
 typedef struct _GrdRdpLayoutManager GrdRdpLayoutManager;
@@ -53,6 +61,7 @@ typedef struct _GrdRdpLegacyBuffer GrdRdpLegacyBuffer;
 typedef struct _GrdRdpNetworkAutodetection GrdRdpNetworkAutodetection;
 typedef struct _GrdRdpPwBuffer GrdRdpPwBuffer;
 typedef struct _GrdRdpRenderContext GrdRdpRenderContext;
+typedef struct _GrdRdpRenderState GrdRdpRenderState;
 typedef struct _GrdRdpRenderer GrdRdpRenderer;
 typedef struct _GrdRdpSAMFile GrdRdpSAMFile;
 typedef struct _GrdRdpServer GrdRdpServer;
@@ -61,6 +70,7 @@ typedef struct _GrdRdpStreamOwner GrdRdpStreamOwner;
 typedef struct _GrdRdpSurface GrdRdpSurface;
 typedef struct _GrdRdpSurfaceRenderer GrdRdpSurfaceRenderer;
 typedef struct _GrdRdpTelemetry GrdRdpTelemetry;
+typedef struct _GrdRdpViewCreator GrdRdpViewCreator;
 typedef struct _GrdSession GrdSession;
 typedef struct _GrdSessionRdp GrdSessionRdp;
 typedef struct _GrdSessionVnc GrdSessionVnc;
@@ -69,6 +79,8 @@ typedef struct _GrdVkBuffer GrdVkBuffer;
 typedef struct _GrdVkDevice GrdVkDevice;
 typedef struct _GrdVkImage GrdVkImage;
 typedef struct _GrdVkMemory GrdVkMemory;
+typedef struct _GrdVkSPIRVSources GrdVkSPIRVSources;
+typedef struct _GrdVkSPIRVSource GrdVkSPIRVSource;
 typedef struct _GrdVkQueue GrdVkQueue;
 typedef struct _GrdVncServer GrdVncServer;
 

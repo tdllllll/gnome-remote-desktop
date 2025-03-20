@@ -41,6 +41,10 @@ GrdRdpGraphicsPipeline *grd_rdp_graphics_pipeline_new (GrdSessionRdp            
 
 void grd_rdp_graphics_pipeline_maybe_init (GrdRdpGraphicsPipeline *graphics_pipeline);
 
+void grd_rdp_graphics_pipeline_get_capabilities (GrdRdpGraphicsPipeline *graphics_pipeline,
+                                                 gboolean               *have_avc444,
+                                                 gboolean               *have_avc420);
+
 void grd_rdp_graphics_pipeline_set_hwaccel_nvidia (GrdRdpGraphicsPipeline *graphics_pipeline,
                                                    GrdHwAccelNvidia       *hwaccel_nvidia);
 
@@ -61,6 +65,9 @@ void grd_rdp_graphics_pipeline_reset_graphics (GrdRdpGraphicsPipeline *graphics_
 
 void grd_rdp_graphics_pipeline_notify_new_round_trip_time (GrdRdpGraphicsPipeline *graphics_pipeline,
                                                            uint64_t                round_trip_time_us);
+
+void grd_rdp_graphics_pipeline_submit_frame (GrdRdpGraphicsPipeline *graphics_pipeline,
+                                             GrdRdpFrame            *rdp_frame);
 
 gboolean grd_rdp_graphics_pipeline_refresh_gfx (GrdRdpGraphicsPipeline *graphics_pipeline,
                                                 GrdRdpSurface          *rdp_surface,
