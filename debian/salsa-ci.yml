@@ -4,5 +4,4 @@ include:
 
 # Salsa CI can't handle the TPM test
 variables:
-  BUILD_PROFILES: nocheck
-  SALSA_CI_DISABLE_AUTOPKGTEST: 1
+  DEB_BUILD_PROFILES: nocheck
