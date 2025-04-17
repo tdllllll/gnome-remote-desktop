@@ -21,6 +21,7 @@
 
 #include "grd-rdp-frame.h"
 
+#include "grd-encode-context.h"
 #include "grd-rdp-render-context.h"
 #include "grd-rdp-renderer.h"
 
@@ -37,6 +38,8 @@ struct _GrdRdpFrame
   GDestroyNotify user_data_destroy;
 
   gboolean pending_view_finalization;
+
+  GrdEncodeContext *encode_context;
 
   GList *acquired_image_views;
   GQueue *unused_image_views;
@@ -60,6 +63,12 @@ GrdRdpRenderContext *
 grd_rdp_frame_get_render_context (GrdRdpFrame *rdp_frame)
 {
   return rdp_frame->render_context;
+}
+
+GrdEncodeContext *
+grd_rdp_frame_get_encode_context (GrdRdpFrame *rdp_frame)
+{
+  return rdp_frame->encode_context;
 }
 
 GList *
@@ -121,13 +130,13 @@ void
 grd_rdp_frame_set_avc_view_type (GrdRdpFrame         *rdp_frame,
                                  GrdRdpFrameViewType  view_type)
 {
-  g_assert (view_type != GRD_RDP_FRAME_VIEW_TYPE_STEREO);
+  g_assert (view_type != GRD_RDP_FRAME_VIEW_TYPE_DUAL);
   g_assert (view_type == GRD_RDP_FRAME_VIEW_TYPE_MAIN ||
             view_type == GRD_RDP_FRAME_VIEW_TYPE_AUX);
 
   switch (rdp_frame->view_type)
     {
-    case GRD_RDP_FRAME_VIEW_TYPE_STEREO:
+    case GRD_RDP_FRAME_VIEW_TYPE_DUAL:
       g_assert (g_queue_get_length (rdp_frame->unused_image_views) == 2);
       g_queue_pop_tail (rdp_frame->unused_image_views);
       break;
@@ -153,10 +162,16 @@ void
 grd_rdp_frame_set_damage_region (GrdRdpFrame    *rdp_frame,
                                  cairo_region_t *damage_region)
 {
+  GrdRdpRenderContext *render_context = rdp_frame->render_context;
+
   g_assert (!rdp_frame->damage_region);
 
   rdp_frame->damage_region = damage_region;
-  finalize_view (rdp_frame);
+  grd_encode_context_set_damage_region (rdp_frame->encode_context,
+                                        damage_region);
+
+  if (!grd_rdp_render_context_must_delay_view_finalization (render_context))
+    finalize_view (rdp_frame);
 }
 
 void
@@ -200,7 +215,7 @@ set_view_type (GrdRdpFrame *rdp_frame,
     case GRD_RDP_CODEC_AVC444v2:
       rdp_frame->view_type =
         frame_upgrade ? GRD_RDP_FRAME_VIEW_TYPE_AUX
-                      : GRD_RDP_FRAME_VIEW_TYPE_STEREO;
+                      : GRD_RDP_FRAME_VIEW_TYPE_DUAL;
       break;
     }
 }
@@ -228,7 +243,7 @@ get_n_image_views_to_be_encoded (GrdRdpFrame *rdp_frame)
 {
   switch (grd_rdp_frame_get_avc_view_type (rdp_frame))
     {
-    case GRD_RDP_FRAME_VIEW_TYPE_STEREO:
+    case GRD_RDP_FRAME_VIEW_TYPE_DUAL:
       return 2;
     case GRD_RDP_FRAME_VIEW_TYPE_MAIN:
     case GRD_RDP_FRAME_VIEW_TYPE_AUX:
@@ -318,6 +333,7 @@ grd_rdp_frame_new (GrdRdpRenderContext *render_context,
   rdp_frame->callback_user_data = callback_user_data;
   rdp_frame->user_data_destroy = user_data_destroy;
 
+  rdp_frame->encode_context = grd_encode_context_new ();
   rdp_frame->unused_image_views = g_queue_new ();
 
   if (src_buffer_new)
@@ -354,6 +370,7 @@ grd_rdp_frame_free (GrdRdpFrame *rdp_frame)
 
   rdp_frame->frame_finalized (rdp_frame, rdp_frame->callback_user_data);
 
+  g_clear_pointer (&rdp_frame->encode_context, grd_encode_context_free);
   g_clear_pointer (&rdp_frame->damage_region, cairo_region_destroy);
   g_clear_pointer (&rdp_frame->callback_user_data,
                    rdp_frame->user_data_destroy);

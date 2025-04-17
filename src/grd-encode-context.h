@@ -17,26 +17,20 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_FRAME_STATS_H
-#define GRD_RDP_FRAME_STATS_H
+#ifndef GRD_ENCODE_CONTEXT_H
+#define GRD_ENCODE_CONTEXT_H
 
-#include <glib.h>
-#include <stdint.h>
+#include <cairo/cairo.h>
 
 #include "grd-types.h"
 
-GrdRdpFrameStats *grd_rdp_frame_stats_new (uint32_t missing_dual_frame_acks,
-                                           uint32_t enc_rate,
-                                           uint32_t ack_rate);
+GrdEncodeContext *grd_encode_context_new (void);
 
-void grd_rdp_frame_stats_free (GrdRdpFrameStats *frame_stats);
+void grd_encode_context_free (GrdEncodeContext *encode_context);
 
-uint32_t grd_rdp_frame_stats_get_missing_dual_frame_acks (GrdRdpFrameStats *frame_stats);
+cairo_region_t *grd_encode_context_get_damage_region (GrdEncodeContext *encode_context);
 
-uint32_t grd_rdp_frame_stats_get_enc_rate (GrdRdpFrameStats *frame_stats);
+void grd_encode_context_set_damage_region (GrdEncodeContext *encode_context,
+                                           cairo_region_t   *damage_region);
 
-uint32_t grd_rdp_frame_stats_get_ack_rate (GrdRdpFrameStats *frame_stats);
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (GrdRdpFrameStats, grd_rdp_frame_stats_free)
-
-#endif /* GRD_RDP_FRAME_STATS_H */
+#endif /* GRD_ENCODE_CONTEXT_H */

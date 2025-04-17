@@ -17,26 +17,35 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_FRAME_STATS_H
-#define GRD_RDP_FRAME_STATS_H
+#include "config.h"
 
-#include <glib.h>
-#include <stdint.h>
+#include "grd-local-buffer.h"
 
-#include "grd-types.h"
+G_DEFINE_ABSTRACT_TYPE (GrdLocalBuffer, grd_local_buffer,
+                        G_TYPE_OBJECT)
 
-GrdRdpFrameStats *grd_rdp_frame_stats_new (uint32_t missing_dual_frame_acks,
-                                           uint32_t enc_rate,
-                                           uint32_t ack_rate);
+uint8_t *
+grd_local_buffer_get_buffer (GrdLocalBuffer *local_buffer)
+{
+  GrdLocalBufferClass *klass = GRD_LOCAL_BUFFER_GET_CLASS (local_buffer);
 
-void grd_rdp_frame_stats_free (GrdRdpFrameStats *frame_stats);
+  return klass->get_buffer (local_buffer);
+}
 
-uint32_t grd_rdp_frame_stats_get_missing_dual_frame_acks (GrdRdpFrameStats *frame_stats);
+uint32_t
+grd_local_buffer_get_buffer_stride (GrdLocalBuffer *local_buffer)
+{
+  GrdLocalBufferClass *klass = GRD_LOCAL_BUFFER_GET_CLASS (local_buffer);
 
-uint32_t grd_rdp_frame_stats_get_enc_rate (GrdRdpFrameStats *frame_stats);
+  return klass->get_buffer_stride (local_buffer);
+}
 
-uint32_t grd_rdp_frame_stats_get_ack_rate (GrdRdpFrameStats *frame_stats);
+static void
+grd_local_buffer_init (GrdLocalBuffer *local_buffer)
+{
+}
 
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (GrdRdpFrameStats, grd_rdp_frame_stats_free)
-
-#endif /* GRD_RDP_FRAME_STATS_H */
+static void
+grd_local_buffer_class_init (GrdLocalBufferClass *klass)
+{
+}

@@ -23,8 +23,11 @@
 
 #include <drm_fourcc.h>
 
+#include "grd-debug.h"
 #include "grd-encode-session.h"
+#include "grd-encode-session-ca-sw.h"
 #include "grd-hwaccel-vaapi.h"
+#include "grd-image-view.h"
 #include "grd-rdp-buffer-info.h"
 #include "grd-rdp-damage-detector.h"
 #include "grd-rdp-frame.h"
@@ -36,6 +39,8 @@
 #include "grd-rdp-surface.h"
 #include "grd-rdp-surface-renderer.h"
 #include "grd-rdp-view-creator-avc.h"
+#include "grd-rdp-view-creator-gen-gl.h"
+#include "grd-rdp-view-creator-gen-sw.h"
 #include "grd-utils.h"
 
 #define STATE_TILE_WIDTH 64
@@ -58,6 +63,8 @@ struct _GrdRdpRenderContext
   GHashTable *acquired_image_views;
 
   GrdImageView *last_acquired_image_view;
+
+  gboolean delay_view_finalization;
 
   uint32_t *chroma_state_buffer;
   uint32_t state_buffer_length;
@@ -90,7 +97,13 @@ grd_rdp_render_context_get_encode_session (GrdRdpRenderContext *render_context)
 }
 
 gboolean
-grd_rdp_render_context_should_avoid_stereo_frame (GrdRdpRenderContext *render_context)
+grd_rdp_render_context_must_delay_view_finalization (GrdRdpRenderContext *render_context)
+{
+  return render_context->delay_view_finalization;
+}
+
+gboolean
+grd_rdp_render_context_should_avoid_dual_frame (GrdRdpRenderContext *render_context)
 {
   GrdRdpGfxSurface *gfx_surface = render_context->gfx_surface;
   GrdRdpGfxFrameController *frame_controller;
@@ -101,7 +114,7 @@ grd_rdp_render_context_should_avoid_stereo_frame (GrdRdpRenderContext *render_co
   frame_controller = grd_rdp_gfx_surface_get_frame_controller (gfx_surface);
   framerate_log = grd_rdp_gfx_frame_controller_get_framerate_log (frame_controller);
 
-  return grd_rdp_gfx_framerate_log_should_avoid_stereo_frame (framerate_log);
+  return grd_rdp_gfx_framerate_log_should_avoid_dual_frame (framerate_log);
 }
 
 static void
@@ -164,6 +177,7 @@ grd_rdp_render_context_release_image_view (GrdRdpRenderContext *render_context,
   if (!g_hash_table_remove (render_context->acquired_image_views, image_view))
     g_assert_not_reached ();
 
+  grd_image_view_notify_image_view_release (image_view);
   update_frame_upgrade_state (render_context);
 }
 
@@ -174,10 +188,10 @@ maybe_downgrade_view_type (GrdRdpRenderContext *render_context,
   GrdRdpFrameViewType view_type;
 
   view_type = grd_rdp_frame_get_avc_view_type (rdp_frame);
-  if (view_type != GRD_RDP_FRAME_VIEW_TYPE_STEREO)
+  if (view_type != GRD_RDP_FRAME_VIEW_TYPE_DUAL)
     return;
 
-  if (grd_rdp_render_context_should_avoid_stereo_frame (render_context))
+  if (grd_rdp_render_context_should_avoid_dual_frame (render_context))
     grd_rdp_frame_set_avc_view_type (rdp_frame, GRD_RDP_FRAME_VIEW_TYPE_MAIN);
 }
 
@@ -200,9 +214,9 @@ is_auxiliary_view_needed (GrdRdpRenderState *render_state)
 }
 
 static void
-update_stereo_frame (GrdRdpRenderContext *render_context,
-                     GrdRdpFrame         *rdp_frame,
-                     GrdRdpRenderState   *render_state)
+update_dual_frame (GrdRdpRenderContext *render_context,
+                   GrdRdpFrame         *rdp_frame,
+                   GrdRdpRenderState   *render_state)
 {
   uint32_t *damage_buffer =
     grd_rdp_render_state_get_damage_buffer (render_state);
@@ -283,8 +297,8 @@ update_avc444_render_state (GrdRdpRenderContext *render_context,
 
   switch (grd_rdp_frame_get_avc_view_type (rdp_frame))
     {
-    case GRD_RDP_FRAME_VIEW_TYPE_STEREO:
-      update_stereo_frame (render_context, rdp_frame, render_state);
+    case GRD_RDP_FRAME_VIEW_TYPE_DUAL:
+      update_dual_frame (render_context, rdp_frame, render_state);
       break;
     case GRD_RDP_FRAME_VIEW_TYPE_MAIN:
       update_main_frame (render_context, rdp_frame, render_state);
@@ -415,11 +429,12 @@ try_create_vaapi_session (GrdRdpRenderContext *render_context,
   uint32_t render_surface_width = 0;
   uint32_t render_surface_height = 0;
   g_autoptr (GError) error = NULL;
-  GList *image_views;
+  g_autoptr (GList) image_views = NULL;
   GList *l;
 
-  if (buffer_info->buffer_type != GRD_RDP_BUFFER_TYPE_DMA_BUF ||
-      buffer_info->drm_format_modifier == DRM_FORMAT_MOD_INVALID)
+  g_assert (buffer_info->buffer_type == GRD_RDP_BUFFER_TYPE_DMA_BUF);
+
+  if (buffer_info->drm_format_modifier == DRM_FORMAT_MOD_INVALID)
     return;
 
   encode_session =
@@ -463,7 +478,6 @@ try_create_vaapi_session (GrdRdpRenderContext *render_context,
 
       g_hash_table_add (render_context->image_views, image_view);
     }
-  g_list_free (image_views);
 
   render_context->view_creator = GRD_RDP_VIEW_CREATOR (view_creator_avc);
   render_context->encode_session = g_steal_pointer (&encode_session);
@@ -477,15 +491,179 @@ try_create_vaapi_session (GrdRdpRenderContext *render_context,
            "size %ux%u", surface_width, surface_height);
 }
 
+static gboolean
+create_egl_based_rfx_progressive_encode_session (GrdRdpRenderContext  *render_context,
+                                                 GrdRdpSurface        *rdp_surface,
+                                                 GrdEglThread         *egl_thread,
+                                                 GrdRdpSwEncoderCa    *encoder_ca,
+                                                 GError              **error)
+{
+  uint32_t surface_width = grd_rdp_surface_get_width (rdp_surface);
+  uint32_t surface_height = grd_rdp_surface_get_height (rdp_surface);
+  GrdEncodeSessionCaSw *encode_session_ca;
+  GrdRdpViewCreatorGenGL *view_creator_gen_gl;
+  GrdEncodeSession *encode_session;
+  g_autoptr (GList) image_views = NULL;
+  GList *l;
+
+  encode_session_ca =
+    grd_encode_session_ca_sw_new (encoder_ca,
+                                  surface_width, surface_height,
+                                  error);
+  if (!encode_session_ca)
+    return FALSE;
+
+  view_creator_gen_gl =
+    grd_rdp_view_creator_gen_gl_new (egl_thread, surface_width, surface_height);
+
+  encode_session = GRD_ENCODE_SESSION (encode_session_ca);
+  image_views = grd_encode_session_get_image_views (encode_session);
+
+  for (l = image_views; l; l = l->next)
+    {
+      GrdImageView *image_view = l->data;
+
+      g_hash_table_add (render_context->image_views, image_view);
+    }
+
+  render_context->view_creator = GRD_RDP_VIEW_CREATOR (view_creator_gen_gl);
+  render_context->encode_session = encode_session;
+
+  render_context->codec = GRD_RDP_CODEC_CAPROGRESSIVE;
+
+  return TRUE;
+}
+
+static gboolean
+create_hw_accelerated_encode_session (GrdRdpRenderContext     *render_context,
+                                      GrdRdpGraphicsPipeline  *graphics_pipeline,
+                                      GrdRdpSurface           *rdp_surface,
+                                      GrdEglThread            *egl_thread,
+                                      GrdRdpSwEncoderCa       *encoder_ca,
+                                      GError                 **error)
+{
+  gboolean have_avc444 = FALSE;
+  gboolean have_avc420 = FALSE;
+
+  grd_rdp_graphics_pipeline_get_capabilities (graphics_pipeline,
+                                              &have_avc444, &have_avc420);
+  if ((have_avc444 || have_avc420) && render_context->hwaccel_vaapi &&
+      grd_get_debug_flags () & GRD_DEBUG_VKVA)
+    try_create_vaapi_session (render_context, rdp_surface, have_avc444);
+
+  if (render_context->encode_session)
+    return TRUE;
+
+  return create_egl_based_rfx_progressive_encode_session (render_context,
+                                                          rdp_surface,
+                                                          egl_thread,
+                                                          encoder_ca,
+                                                          error);
+}
+
+static gboolean
+create_sw_based_rfx_progressive_encode_session (GrdRdpRenderContext  *render_context,
+                                                GrdRdpSurface        *rdp_surface,
+                                                GrdRdpSwEncoderCa    *encoder_ca,
+                                                GError              **error)
+{
+  uint32_t surface_width = grd_rdp_surface_get_width (rdp_surface);
+  uint32_t surface_height = grd_rdp_surface_get_height (rdp_surface);
+  GrdEncodeSessionCaSw *encode_session_ca;
+  GrdRdpViewCreatorGenSW *view_creator_gen_sw;
+  GrdEncodeSession *encode_session;
+  g_autoptr (GList) image_views = NULL;
+  GList *l;
+
+  encode_session_ca =
+    grd_encode_session_ca_sw_new (encoder_ca,
+                                  surface_width, surface_height,
+                                  error);
+  if (!encode_session_ca)
+    return FALSE;
+
+  view_creator_gen_sw = grd_rdp_view_creator_gen_sw_new (surface_width,
+                                                         surface_height);
+
+  encode_session = GRD_ENCODE_SESSION (encode_session_ca);
+  image_views = grd_encode_session_get_image_views (encode_session);
+
+  for (l = image_views; l; l = l->next)
+    {
+      GrdImageView *image_view = l->data;
+
+      g_hash_table_add (render_context->image_views, image_view);
+    }
+
+  render_context->view_creator = GRD_RDP_VIEW_CREATOR (view_creator_gen_sw);
+  render_context->encode_session = encode_session;
+
+  render_context->codec = GRD_RDP_CODEC_CAPROGRESSIVE;
+  render_context->delay_view_finalization = TRUE;
+
+  return TRUE;
+}
+
+static gboolean
+create_sw_based_encode_session (GrdRdpRenderContext     *render_context,
+                                GrdRdpGraphicsPipeline  *graphics_pipeline,
+                                GrdRdpSurface           *rdp_surface,
+                                GrdRdpSwEncoderCa       *encoder_ca,
+                                GError                 **error)
+{
+  return create_sw_based_rfx_progressive_encode_session (render_context,
+                                                         rdp_surface,
+                                                         encoder_ca,
+                                                         error);
+}
+
+static gboolean
+create_encode_session (GrdRdpRenderContext     *render_context,
+                       GrdRdpGraphicsPipeline  *graphics_pipeline,
+                       GrdRdpSurface           *rdp_surface,
+                       GrdEglThread            *egl_thread,
+                       GrdRdpSwEncoderCa       *encoder_ca,
+                       GError                 **error)
+{
+  GrdRdpSurfaceRenderer *surface_renderer =
+    grd_rdp_surface_get_surface_renderer (rdp_surface);
+  GrdRdpBufferInfo *buffer_info =
+    grd_rdp_surface_renderer_get_buffer_info (surface_renderer);
+
+  switch (buffer_info->buffer_type)
+    {
+    case GRD_RDP_BUFFER_TYPE_DMA_BUF:
+      return create_hw_accelerated_encode_session (render_context,
+                                                   graphics_pipeline,
+                                                   rdp_surface,
+                                                   egl_thread,
+                                                   encoder_ca,
+                                                   error);
+    case GRD_RDP_BUFFER_TYPE_MEM_FD:
+      return create_sw_based_encode_session (render_context,
+                                             graphics_pipeline,
+                                             rdp_surface,
+                                             encoder_ca,
+                                             error);
+    case GRD_RDP_BUFFER_TYPE_NONE:
+      g_assert_not_reached ();
+      return FALSE;
+    }
+
+  g_assert_not_reached ();
+  return FALSE;
+}
+
 GrdRdpRenderContext *
 grd_rdp_render_context_new (GrdRdpGraphicsPipeline *graphics_pipeline,
                             GrdRdpSurface          *rdp_surface,
+                            GrdEglThread           *egl_thread,
                             GrdVkDevice            *vk_device,
-                            GrdHwAccelVaapi        *hwaccel_vaapi)
+                            GrdHwAccelVaapi        *hwaccel_vaapi,
+                            GrdRdpSwEncoderCa      *encoder_ca)
 {
-  GrdRdpRenderContext *render_context;
-  gboolean have_avc444 = FALSE;
-  gboolean have_avc420 = FALSE;
+  g_autoptr (GrdRdpRenderContext) render_context = NULL;
+  g_autoptr (GError) error = NULL;
 
   g_assert (graphics_pipeline);
 
@@ -499,14 +677,15 @@ grd_rdp_render_context_new (GrdRdpGraphicsPipeline *graphics_pipeline,
   render_context->gfx_surface =
     grd_rdp_graphics_pipeline_acquire_gfx_surface (graphics_pipeline,
                                                    rdp_surface);
-  render_context->codec = GRD_RDP_CODEC_CAPROGRESSIVE;
 
-  grd_rdp_graphics_pipeline_get_capabilities (graphics_pipeline,
-                                              &have_avc444, &have_avc420);
-  if ((have_avc444 || have_avc420) && render_context->hwaccel_vaapi)
-    try_create_vaapi_session (render_context, rdp_surface, have_avc444);
+  if (!create_encode_session (render_context, graphics_pipeline, rdp_surface,
+                              egl_thread, encoder_ca, &error))
+    {
+      g_warning ("[RDP] Failed to create encode session: %s", error->message);
+      return NULL;
+    }
 
-  return render_context;
+  return g_steal_pointer (&render_context);
 }
 
 static void

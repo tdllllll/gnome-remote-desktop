@@ -17,26 +17,19 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_FRAME_STATS_H
-#define GRD_RDP_FRAME_STATS_H
+#ifndef GRD_RDP_VIEW_CREATOR_GEN_GL_H
+#define GRD_RDP_VIEW_CREATOR_GEN_GL_H
 
-#include <glib.h>
 #include <stdint.h>
 
-#include "grd-types.h"
+#include "grd-rdp-view-creator.h"
 
-GrdRdpFrameStats *grd_rdp_frame_stats_new (uint32_t missing_dual_frame_acks,
-                                           uint32_t enc_rate,
-                                           uint32_t ack_rate);
+#define GRD_TYPE_RDP_VIEW_CREATOR_GEN_GL (grd_rdp_view_creator_gen_gl_get_type ())
+G_DECLARE_FINAL_TYPE (GrdRdpViewCreatorGenGL, grd_rdp_view_creator_gen_gl,
+                      GRD, RDP_VIEW_CREATOR_GEN_GL, GrdRdpViewCreator)
 
-void grd_rdp_frame_stats_free (GrdRdpFrameStats *frame_stats);
+GrdRdpViewCreatorGenGL *grd_rdp_view_creator_gen_gl_new (GrdEglThread *egl_thread,
+                                                         uint32_t      surface_width,
+                                                         uint32_t      surface_height);
 
-uint32_t grd_rdp_frame_stats_get_missing_dual_frame_acks (GrdRdpFrameStats *frame_stats);
-
-uint32_t grd_rdp_frame_stats_get_enc_rate (GrdRdpFrameStats *frame_stats);
-
-uint32_t grd_rdp_frame_stats_get_ack_rate (GrdRdpFrameStats *frame_stats);
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (GrdRdpFrameStats, grd_rdp_frame_stats_free)
-
-#endif /* GRD_RDP_FRAME_STATS_H */
+#endif /* GRD_RDP_VIEW_CREATOR_GEN_GL_H */

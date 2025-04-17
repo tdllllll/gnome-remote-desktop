@@ -27,7 +27,7 @@
 
 typedef enum
 {
-  GRD_RDP_FRAME_VIEW_TYPE_STEREO,
+  GRD_RDP_FRAME_VIEW_TYPE_DUAL,
   GRD_RDP_FRAME_VIEW_TYPE_MAIN,
   GRD_RDP_FRAME_VIEW_TYPE_AUX,
 } GrdRdpFrameViewType;
@@ -50,6 +50,8 @@ void grd_rdp_frame_free (GrdRdpFrame *rdp_frame);
 GrdRdpRenderer *grd_rdp_frame_get_renderer (GrdRdpFrame *rdp_frame);
 
 GrdRdpRenderContext *grd_rdp_frame_get_render_context (GrdRdpFrame *rdp_frame);
+
+GrdEncodeContext *grd_rdp_frame_get_encode_context (GrdRdpFrame *rdp_frame);
 
 GList *grd_rdp_frame_get_image_views (GrdRdpFrame *rdp_frame);
 
