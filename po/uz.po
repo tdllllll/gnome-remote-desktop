@@ -1,18 +1,18 @@
-# Chinese (Taiwan) translation for gnome-remote-desktop.
-# Copyright (C) 2021 gnome-remote-desktop's COPYRIGHT HOLDER
+# Uzbek (Latin) translation for gnome-remote-desktop.
+# Copyright (C) 2025 gnome-remote-desktop's COPYRIGHT HOLDER
 # This file is distributed under the same license as the gnome-remote-desktop package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# Elchin Toyirov <elchintoyirov@gmail.com>,  2025.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: gnome-remote-desktop master\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/"
 "issues/\n"
-"POT-Creation-Date: 2025-03-26 09:48+0000\n"
-"PO-Revision-Date: 2025-03-27 16:54+0800\n"
-"Last-Translator: Cheng-Chia Tseng <zerngjia@gmail.com>\n"
-"Language-Team: Chinese (Taiwan) <chinese-l10n@googlegroups.com>\n"
-"Language: zh_TW\n"
+"POT-Creation-Date: 2025-03-19 20:57+0000\n"
+"PO-Revision-Date: 2025-03-25 11:00+0500\n"
+"Last-Translator: \n"
+"Language-Team: Uzbek (Latin) <uz@li.org>\n"
+"Language: uz\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -20,44 +20,51 @@ msgstr ""
 
 #: data/org.gnome.remotedesktop.configure-system-daemon.policy.in:11
 msgid "Allow to configure gnome-remote-desktop's system daemon settings"
-msgstr "讓您調整 GNOME 遠端桌面系統幕後程式的組態設定"
+msgstr ""
+"Gnome-remote-desktop tizim demoni sozlamalarini sozlashga ruxsat berish"
 
 #: data/org.gnome.remotedesktop.configure-system-daemon.policy.in:12
 msgid ""
 "Authentication is required to configure gnome-remote-desktop's system daemon "
 "settings"
-msgstr "設定 GNOME 遠端桌面的系統幕後程式組態需要通過身分核對"
+msgstr ""
+"Gnome-remote-desktop tizim demoni sozlamalarini sozlash uchun "
+"autentifikatsiya talab qilinadi"
 
 #: data/org.gnome.remotedesktop.enable-system-daemon.policy.in:11
 msgid "Allow to enable and disable gnome-remote-desktop's system daemon"
-msgstr "讓您啟用和停用 GNOME 遠端桌面系統幕後程式"
+msgstr ""
+"Gnome-remote-desktop tizim demoni funksiyasini yoqish va faolsizlantirishga "
+"ruxsat"
 
 #: data/org.gnome.remotedesktop.enable-system-daemon.policy.in:12
 msgid ""
 "Authentication is required to enable or disable gnome-remote-desktop's "
 "system daemon"
-msgstr "啟用或停用 GNOME 遠端桌面的系統幕後程式需要通過身分核對"
+msgstr ""
+"Gnome-remote-desktop tizim demoni funksiyasini yoqish yoki faolsizlantirish "
+"uchun autentifikatsiya talab qilinadi"
 
 #: data/org.gnome.RemoteDesktop.Handover.desktop.in:4
 msgid "GNOME Remote Desktop Handover Daemon"
-msgstr "GNOME 遠端桌面接管幕後程式"
+msgstr "GNOME Remote Desktop Handover demon"
 
 #: src/grd-ctl.c:70
 #, c-format
 msgid "Usage: %s [OPTIONS...] COMMAND [SUBCOMMAND]...\n"
-msgstr "用法：%s [OPTIONS…] COMMAND [SUBCOMMAND]…\n"
+msgstr "Foydalanish: %s [OPTIONS...] COMMAND [SUBCOMMAND]...\n"
 
 #: src/grd-ctl.c:305
 msgid "Username: "
-msgstr "使用者名稱："
+msgstr "Foydalanuvchi nomi: "
 
 #: src/grd-ctl.c:317 src/grd-ctl.c:460
 msgid "Password: "
-msgstr "密碼："
+msgstr "Parol: "
 
 #: src/grd-ctl.c:590
 msgid "Commands:\n"
-msgstr "命令：\n"
+msgstr "Buyruqlar:\n"
 
 #: src/grd-ctl.c:595
 msgid ""
@@ -89,18 +96,33 @@ msgid ""
 "                                                   to a different port\n"
 "\n"
 msgstr ""
-"  rdp                                        - RDP 子命令：\n"
-"    set-port                                       - 設定伺服器通訊埠\n"
-"    enable                                          - 啟用 RDP 後端\n"
-"    disable                                         - 停用 RDP 後端\n"
-"    set-tls-cert <path-to-cert>           - 設定 TLS 憑證路徑\n"
-"    set-tls-key <path-to-key>            - 設定 TLS 密鑰路徑\n"
-"    set-credentials [<username> [<password>]]   - 設定使用者名稱和密碼憑證\n"
-"    clear-credentials                          - 清除使用者名稱和密碼憑證\n"
-"    enable-view-only                         - 停用輸入裝置的遠端控制\n"
-"    disable-view-only                        - 啟用輸入裝置的遠端控制\n"
-"    enable-port-negotiation                - 如果沒有，監聽其他通訊埠\n"
-"    disable-port-negotiation               - 如果沒有，不要監聽其他通訊埠\n"
+"  rdp                                            - RDP kichik buyruqlari:\n"
+"    set-port                                     - Server bog‘lanadigan "
+"portni o‘rnatish\n"
+"    enable                                       - RDP backendni yoqish\n"
+"    disable                                      - RDP backendni o‘chirish\n"
+"    set-tls-cert <path-to-cert>                  - TLS sertifikatiga yo‘l "
+"o‘rnatish\n"
+"    set-tls-key <path-to-key>                    - TLS kalitiga yo‘l "
+"o‘rnatish\n"
+"    set-credentials [<username> [<password>]]    - Foydalanuvchi nomi va "
+"parolni o‘rnatish\n"
+"                                                   credentials\n"
+"    clear-credentials                            - Foydalanuvchi nomi va "
+"parolni tozalash\n"
+"                                                   qurilmalar\n"
+"    enable-view-only                             - Kirishni masofadan "
+"boshqarish funksiyasini yoqish\n"
+"                                                   qurilmalar\n"
+"    disable-view-only                            - Kirishni masofadan "
+"boshqarishni yoqing\n"
+"                                                   qurilmalar\n"
+"    enable-port-negotiation                      - Agar mavjud bo‘lmasa, "
+"tinglang\n"
+"                                                   boshqa port\n"
+"    disable-port-negotiation                     - Agar mavjud bo‘lmasa, "
+"tinglamang\n"
+"                                                   boshqa port\n"
 "\n"
 
 #: src/grd-ctl.c:619
@@ -124,17 +146,27 @@ msgid ""
 "                                               to a different port\n"
 "\n"
 msgstr ""
-"  vnc                                          - VNC 子命令：\n"
-"    set-port                                   - 設定伺服器通訊埠\n"
-"    enable                                     - 啟用 VNC 後端\n"
-"    disable                                    - 停用 VNC 後端\n"
-"    set-password [<password>]       - 設定 VNC 密碼\n"
-"    clear-password                        - 清除 VNC 密碼\n"
-"    set-auth-method password|prompt  - 設定授權方式\n"
-"    enable-view-only                      - 停用輸入裝置的遠端控制\n"
-"    disable-view-only                     - 啟用輸入裝置的遠端控制\n"
-"    enable-port-negotiation            - 如果沒有，監聽其他通訊埠\n"
-"    disable-port-negotiation            - 如果沒有，不要監聽其他通訊埠\n"
+"  vnc                                        - VNC qism buyruqlari:s:\n"
+"    set-port                                 - Server bog‘lanadigan portni "
+"o‘rnatish\n"
+"    enable                                   - VNC backendni yoqish\n"
+"    disable                                  - VNC backendni o‘chirish\n"
+"    set-password [<password>]                - VNC parolini o‘rnatish\n"
+"    clear-password                           - VNC parolini tozalash\n"
+"    set-auth-method password|prompt          - Avtorizatsiya usulini "
+"sozlash\n"
+"    enable-view-only                         - Kiruvchi qurilmalar uchun "
+"masofaviy boshqaruvni o'chirish\n"
+"                                               devices\n"
+"    disable-view-only                        - Kiruvchi qurilmalar uchun "
+"masofaviy boshqaruvni yoqish\n"
+"                                               devices\n"
+"    enable-port-negotiation                  - Agar mavjud bo'lmasa, "
+"tinglang\n"
+"                                               boshqa port\n"
+"    disable-port-negotiation                 - Agar mavjud bo'lmasa, "
+"tinglamang\n"
+"                                               boshqa port\n"
 "\n"
 
 #: src/grd-ctl.c:639
@@ -147,21 +179,21 @@ msgid ""
 "  --system                                   - Configure system daemon\n"
 "  --help                                     - Print this help text\n"
 msgstr ""
-"  status [--show-credentials]           - 顯示目前狀態\n"
+" status [--show-credentials] - Joriy holatni ko‘rsatish\n"
 "\n"
-"選項：\n"
-"  --headless                                 - 使用無畫面憑證儲存\n"
-"  --system                                   - 設定系統幕後程式\n"
-"  --help                                     - 顯示本輔助訊息\n"
+"Variantlar:\n"
+"--headless - Hisob ma’lumotlarini boshsiz saqlash\n"
+"--system - Tizimni sozlash demoni\n"
+"--help - Ushbu yordam matnini chop etish\n"
 
 #: src/grd-daemon.c:992
 msgid "GNOME Remote Desktop"
-msgstr "GNOME 遠端桌面"
+msgstr "GNOME Remote Desktop"
 
 #: src/grd-daemon-handover.c:297 src/grd-daemon-handover.c:358
 #, c-format
 msgid "Continue With Insecure Connection?"
-msgstr "繼續使用不安全連線？"
+msgstr "Xavfli ulanish bilan davom etasizmi?"
 
 #. Translators: Don't translate “use redirection server name:i:1”.
 #. * It's a menu option, and it's the same for all languages.
@@ -172,24 +204,25 @@ msgid ""
 "enable RDSTLS Security in your client by saving the connection settings in "
 "your client as an RDP file and set “use redirection server name:i:1” in it."
 msgstr ""
-"此遠端桌面連線不安全。若要確保此連線的安全性，請在客戶端中啟用 RDSTLS 安全設"
-"定，方法是將客戶端中的連線設定另儲存為 RDP 檔案，並在檔案中設定「use "
-"redirection server name:i:1」。"
+"Bu Masofaviy ish stoli aloqasi xavfsiz emas. Ushbu ulanishni ta’minlash "
+"uchun mijozingizdagi ulanish sozlamalarini RDP fayli sifatida saqlash orqali "
+"mijozingizda RDSTLS Xavfsizligini yoqing va unda \"qayta yo‘naltirish server "
+"nomidan foydalaning:i:1\" deb belgilang."
 
 #: src/grd-daemon-handover.c:305 src/grd-daemon-handover.c:367
 #, c-format
 msgid "Disconnect"
-msgstr "中斷連接"
+msgstr "Ajratish"
 
 #: src/grd-daemon-handover.c:306 src/grd-daemon-handover.c:368
 #, c-format
 msgid "Continue"
-msgstr "繼續"
+msgstr "Davom ettirish"
 
 #: src/grd-daemon-user.c:99
 #, c-format
 msgid "Desktop Sharing port changed"
-msgstr "桌面共享的通訊埠已變更"
+msgstr "Desktop Share porti o‘zgartirildi"
 
 #: src/grd-daemon-user.c:101
 #, c-format
@@ -198,62 +231,66 @@ msgid ""
 "This is because the Remote Sessions service has been activated and it has a "
 "higher priority to use port <b>%i</b>."
 msgstr ""
-"桌面共享的通訊埠已從 <b>%i</b> 變更為 <b>%i</b>。\n"
-"這是因為《遠端作業階段》服務已啟動，而且有更高的優先權使用 <b>%i</b> 通訊埠。"
+"Ish stolini ulashish porti <b>%i</b> dan <b>%i</b> ga almashtirildi.\n"
+"Bunga Masofaviy seanslar xizmati faollashtirilgani va uning <b>%i</b> "
+"portini ishlatish ustuvorligi yuqori ekanligi sabab bo‘ldi."
 
 #: src/grd-daemon-user.c:107 src/grd-session-vnc.c:310
 #, c-format
 msgid "Accept"
-msgstr "接受"
+msgstr "Qabul qilish"
 
 #: src/grd-session-vnc.c:305
 #, c-format
 msgid "Do you want to share your desktop?"
-msgstr "您確定要共享桌面嗎？"
+msgstr "Desktopingizni ulashishni xohlaysizmi?"
 
 #: src/grd-session-vnc.c:307
 #, c-format
 msgid ""
 "A user on the computer '%s' is trying to remotely view or control your "
 "desktop."
-msgstr "在「%s」這台電腦上，有使用者正在嘗試從遠端查看或控制您的電腦。"
+msgstr ""
+"’%s’ kompyuteridagi foydalanuvchi ish stolingizni masofadan ko‘rishga yoki "
+"boshqarishga harakat qilmoqda."
 
 #: src/grd-session-vnc.c:309
 #, c-format
 msgid "Refuse"
-msgstr "拒絕"
+msgstr "Rad etish"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:7
 msgid "The port used by the RDP server"
-msgstr "RDP 伺服器使用的通訊埠"
+msgstr "RDP serveri foydalanadigan port"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:8
 msgid "The RDP client will connect to this port to use this RDP server."
-msgstr "RDP 客戶端會連線到此通訊埠，以便使用此 RDP 伺服器。"
+msgstr ""
+"RDP mijozi ushbu RDP serveridan foydalanish uchun ushbu portga ulanadi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:14
 msgid "Search a different RDP port if the configured one is used"
-msgstr "如果組態設定的 RDP 通訊埠被使用，則搜尋其他通訊埠替代"
+msgstr "Agar sozlangan port ishlatilsa, boshqa RDP portini qidiring"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:15
 msgid ""
 "When negotiate-port is set to 'true' the RDP server will attempt to listen "
 "to the first available of the next 10 ports starting from the configured one."
 msgstr ""
-"當協商通訊埠設定為「true」時，RDP 伺服器將嘗試監聽從組態所設定的通訊埠開始，"
-"其後續 10 個通訊埠，並找出第一個可用埠來使用。"
+"Muzokara porti \"to‘g‘ri\"ga sozlanganda, RDP serveri sozlangan portdan "
+"boshlab keyingi 10 ta portning birinchisini tinglashga harakat qiladi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:23
 msgid "Whether the RDP backend is enabled or not"
-msgstr "是否啟用 RDP 後端"
+msgstr "RDP backend yoqilganmi yoki yo‘qmi"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:24
 msgid "If set to 'true' the RDP backend will be initialized."
-msgstr "如果設定為「true」，RDP 後端將初始化。"
+msgstr "Agar ’true’ qiymati o‘rnatilsa, RDP backend initsializatsiya qilinadi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:30
 msgid "Screenshare mode of RDP connections"
-msgstr "RDP 連線的螢幕共享模式"
+msgstr "RDP ulanishlari uchun ekran namoyishi rejimi"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:31
 msgid ""
@@ -270,16 +307,23 @@ msgid ""
 "resolution of this virtual monitor is derived from the monitor "
 "configuration, submitted by the remote desktop client."
 msgstr ""
-"螢幕共享模式需指定，是 RDP 後端要映射主螢幕，或是要建立虛擬螢幕。虛擬螢幕的初"
-"始解析度取決於客戶端資訊 ([MS-RDPBCGR] 2.2.1.3.2) 或者它的螢幕資料 ([MS-"
-"RDPBCGR] 2.2.1.3.6)。當使用虛擬螢幕來控制遠端桌面時，客戶端可以使用螢幕更新虛"
-"擬頻道延伸 ([MS-RDPEDISP]) 的方式來縮放虛擬螢幕的解析度。可用的螢幕共享模式"
-"有：* 映射主畫面 - 同步主螢幕同畫面。* 延伸 - 建立新的遠端桌面的虛擬螢幕，它"
-"的解析度依照遠端客戶端的設定。"
+"Screenshare rejimi RDP backend asosiy ekranga o‘xshashligini yoki virtual "
+"monitor yaratilganligini ko‘rsatadi. Virtual monitorning dastlabki aniqlik "
+"darajasi uchun RDP backend mavjud ma’lumotlarga qarab mijozning asosiy "
+"ma’lumotlaridan ([MS-RDPBCGR] 2.2.1.3.2) yoki mijoz monitorining "
+"ma’lumotlaridan ([MS-RDPBCGR] 2.2.1.3.6) foydalanadi. Virtual monitor bilan "
+"masofaviy ish stoli seansidan foydalanganda, mijozlar Display Update Virtual "
+"Channel Extension ([MS-RDPEDISP]) bilan seans davomida virtual monitorning "
+"aniqlik darajasini o‘zgartirishlari mumkin. Ruxsat etilgan ekran almashish "
+"rejimlariga quyidagilar kiradi: * mirror-primary - joriy foydalanuvchi "
+"seansining asosiy monitorini yozib olish. * extend - Yangi virtual monitor "
+"yarating va uni masofadagi ish stoli seansi uchun ishlating. Ushbu virtual "
+"monitorning aniqlik darajasi masofaviy ish stoli mijozi tomonidan taqdim "
+"etilgan monitor konfiguratsiyasidan kelib chiqadi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:57
 msgid "Path to the certificate file"
-msgstr "憑證檔的路徑"
+msgstr "Sertifikat fayliga yo‘l"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:58
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:66
@@ -287,65 +331,68 @@ msgid ""
 "In order to be able to use RDP with TLS Security, both the private key file "
 "and the certificate file need to be provided to the RDP server."
 msgstr ""
-"想要使用加上 TLS 安全防護的 RDP 連線，您需要來自 RDP 伺服器的私鑰以及憑證檔"
-"案。"
+"TLS Security bilan RDP dan foydalanish imkoniyatiga ega bo‘lish uchun maxfiy "
+"kalit fayli ham, sertifikat fayli ham RDP serveriga taqdim etilishi kerak."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:65
 msgid "Path to the private key file"
-msgstr "私鑰檔案的路徑"
+msgstr "Maxfiy kalit fayliga yo‘l"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:73
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:106
 msgid "Only allow remote connections to view the screen content"
-msgstr "只允許遠端連線檢視螢幕內容"
+msgstr ""
+"Ekrandagi kontentni ko‘rish uchun faqat masofaviy ulanishlarga ruxsat bering"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:74
 msgid ""
 "When view-only is true, remote RDP connections cannot manipulate input "
 "devices (e.g. mouse and keyboard)."
 msgstr ""
-"如果是在只能夠查看畫面的模式，來自遠端的 RDP 連線就不能夠操作（像是滑鼠與鍵盤"
-"等）輸入裝置。"
+"Faqat ko‘rinish true bo‘lganda, masofaviy RDP ulanishlari kiritish "
+"qurilmalarini (masalan, sichqoncha va klaviatura) boshqara olmaydi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:83
 msgid "The port used by the VNC server"
-msgstr "VNC 伺服器使用的通訊埠"
+msgstr "VNC serveri foydalanadigan port"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:84
 msgid "The VNC client will connect to this port to use this VNC server."
-msgstr "VNC 客戶端將連線到此通訊埠以使用此 VNC 伺服器。"
+msgstr ""
+"VNC mijozi ushbu VNC serveridan foydalanish uchun ushbu portga ulanadi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:90
 msgid "Search a different VNC port if the configured one is used"
-msgstr "如果組態設定的 VNC 通訊埠已被使用，則搜尋其他通訊埠替代"
+msgstr "Agar sozlangan port ishlatilgan bo‘lsa, boshqa VNC portini qidiring"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:91
 msgid ""
 "When negotiate-port is set to 'true' the VNC server will attempt to listen "
 "to the first available of the next 10 ports starting from the configured one."
 msgstr ""
-"當協商通訊埠設定為「true」時，VNC 伺服器將嘗試監聽從組態所設定的通訊埠開始，"
-"其後續 10 個通訊埠，並找出第一個可用埠來使用。"
+"Muzokara porti \"true\"ga sozlanganda, VNC serveri sozlangan portdan boshlab "
+"keyingi 10 ta portning birinchisini tinglashga harakat qiladi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:99
 msgid "Whether the VNC backend is enabled or not"
-msgstr "是否啟用 VNC 後端"
+msgstr "VNC backend yoqilganmi yoki yo‘qmi"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:100
 msgid "If set to 'true' the VNC backend will be initialized."
-msgstr "如果設定為「true」，VNC 後端將被初始化。"
+msgstr ""
+"Agar ’true’ qiymatiga o‘rnatilsa, VNC backend initsializatsiya qilinadi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:107
 msgid ""
 "When view-only is true, remote VNC connections cannot manipulate input "
 "devices (e.g. mouse and keyboard)."
 msgstr ""
-"如果是在只能夠查看畫面的模式，來自遠端的 RDP 連線就不能夠操作（像是滑鼠與鍵盤"
-"等）輸入裝置。"
+"Faqat ko‘rinish haqiqiy bo‘lganda, masofaviy VNC ulanishlari kiritish "
+"qurilmalarini (masalan, sichqoncha va klaviatura) boshqara olmaydi."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:114
 msgid "Method used to authenticate VNC connections"
-msgstr "用於核對 VNC 連線身分的方法"
+msgstr "VNC ulanishlarini autentifikatsiya qilish uchun ishlatiladigan usul"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:115
 msgid ""
@@ -355,14 +402,16 @@ msgid ""
 "access to the workstation to explicitly approve the new connection. * "
 "password - by requiring the remote client to provide a known password"
 msgstr ""
-"VNC 身分核對這部份，描述您的電腦會如何核對遠端連線身分。您的電腦可以兩種不同"
-"的方式進行： * 跳出提示 - 每次有新的連線，都會跳出提示訊息，然後必須要有人在"
-"電腦前執行實體操作，才能允許連線。 * 輸入密碼 - 在想進行連線的遠端客戶端上，"
-"輸入正確的密碼"
+"VNC autentifikatsiya usuli masofaviy ulanishning qanday autentifikatsiya "
+"qilinishini tavsiflaydi. Hozirgi vaqtda bu ikki xil usulda amalga "
+"oshirilishi mumkin: * so‘rov - foydalanuvchini har bir yangi ulanish uchun "
+"so‘rash orqali, ish joyiga jismoniy kirish imkoniyatiga ega bo‘lgan shaxsdan "
+"yangi ulanishni aniq tasdiqlashni talab qiladi. * parol - masofadagi "
+"mijozdan ma’lum parolni taqdim etishni talab qilish orqali"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:127
 msgid "Screenshare mode of VNC connections"
-msgstr "VNC 連線的螢幕共享模式"
+msgstr "VNC ulanishlarining ekran namoyishi rejimi"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:128
 msgid ""
@@ -378,22 +427,15 @@ msgid ""
 "Clients can override the initial resolution with subsequent monitor "
 "configuration updates."
 msgstr ""
-"螢幕共享模式需指定，是 VNC 後端要映射主螢幕，或是要建立虛擬螢幕。虛擬螢幕的初"
-"始解析度預設為 1920x1080 像素。當使用虛擬螢幕來對應遠端桌面時，客戶端可以使"
-"用 setDesktopSize PDU 來縮放虛擬螢幕的解析度。可用的螢幕共享模式有：* 映射主"
-"畫面 - 同步主螢幕同畫面。* 延伸 - 建立新的遠端桌面的虛擬螢幕，它的解析度預設"
-"為 1920x1080 像素，也可依照遠端客戶端的組態設定改變。"
-
-#, c-format
-#~ msgid "This connection is insecure"
-#~ msgstr "此連線不安全"
-
-#, c-format
-#~ msgid ""
-#~ "Do you want to continue with an insecure connection?\n"
-#~ "To make it secure set <b>“use redirection server name:i:1”</b> in the RDP "
-#~ "config file."
-#~ msgstr ""
-#~ "您確定要以不安全的連線方式繼續嗎？\n"
-#~ "若要確保安全，請在 RDP 的組態檔中設定 <b>“use redirection server name:"
-#~ "i:1”</b>。"
+"Screenshare rejimi VNC backend asosiy ekranni aks ettirishini yoki virtual "
+"monitor yaratilishini belgilaydi. Virtual monitorning dastlabki aniqlik "
+"darajasi uchun VNC backend 1920x1080 piksel standart o‘lchamdan foydalanadi. "
+"Virtual monitor bilan masofaviy ish stoli seansidan foydalanganda, mijozlar "
+"setDesktopSize PDU bilan seans davomida virtual monitorning o‘lchamlarini "
+"o‘zgartirishlari mumkin. Ruxsat etilgan ekran almashish rejimlariga "
+"quyidagilar kiradi: * mirror-primary - joriy foydalanuvchi seansining asosiy "
+"monitorini yozib olish. * extend - Yangi virtual monitor yarating va undan "
+"masofadagi ish stoli seansi uchun foydalaning. Ushbu virtual monitorning "
+"dastlabki monitor aniqligi 1920x1080 pikselga o‘rnatilgan. Mijozlar "
+"dastlabki aniqlikni keyinchalik monitor konfiguratsiyasini yangilash orqali "
+"bekor qilishlari mumkin."

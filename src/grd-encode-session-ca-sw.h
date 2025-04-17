@@ -17,26 +17,19 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_FRAME_STATS_H
-#define GRD_RDP_FRAME_STATS_H
+#ifndef GRD_ENCODE_SESSION_CA_SW_H
+#define GRD_ENCODE_SESSION_CA_SW_H
 
-#include <glib.h>
-#include <stdint.h>
-
+#include "grd-encode-session.h"
 #include "grd-types.h"
 
-GrdRdpFrameStats *grd_rdp_frame_stats_new (uint32_t missing_dual_frame_acks,
-                                           uint32_t enc_rate,
-                                           uint32_t ack_rate);
+#define GRD_TYPE_ENCODE_SESSION_CA_SW (grd_encode_session_ca_sw_get_type ())
+G_DECLARE_FINAL_TYPE (GrdEncodeSessionCaSw, grd_encode_session_ca_sw,
+                      GRD, ENCODE_SESSION_CA_SW, GrdEncodeSession)
 
-void grd_rdp_frame_stats_free (GrdRdpFrameStats *frame_stats);
+GrdEncodeSessionCaSw *grd_encode_session_ca_sw_new (GrdRdpSwEncoderCa  *encoder_ca,
+                                                    uint32_t            source_width,
+                                                    uint32_t            source_height,
+                                                    GError            **error);
 
-uint32_t grd_rdp_frame_stats_get_missing_dual_frame_acks (GrdRdpFrameStats *frame_stats);
-
-uint32_t grd_rdp_frame_stats_get_enc_rate (GrdRdpFrameStats *frame_stats);
-
-uint32_t grd_rdp_frame_stats_get_ack_rate (GrdRdpFrameStats *frame_stats);
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (GrdRdpFrameStats, grd_rdp_frame_stats_free)
-
-#endif /* GRD_RDP_FRAME_STATS_H */
+#endif /* GRD_ENCODE_SESSION_CA_SW_H */

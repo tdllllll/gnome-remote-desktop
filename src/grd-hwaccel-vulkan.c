@@ -454,8 +454,8 @@ get_queue_family_properties (VkPhysicalDevice           vk_physical_device,
 }
 
 static gboolean
-find_queue_family_index_with_bitmask (VkPhysicalDevice vk_physical_device,
-                                      VkQueueFlags     bitmask)
+has_queue_family_with_bitmask (VkPhysicalDevice vk_physical_device,
+                               VkQueueFlags     bitmask)
 {
   g_autofree VkQueueFamilyProperties2 *properties_2 = NULL;
   uint32_t n_properties_2 = 0;
@@ -549,9 +549,9 @@ check_physical_device (GrdHwAccelVulkan *hwaccel_vulkan,
   hwaccel_vulkan->supports_storage_image_update_after_bind =
     !!vulkan12_features.descriptorBindingStorageImageUpdateAfterBind;
 
-  if (!find_queue_family_index_with_bitmask (vk_physical_device,
-                                             VK_QUEUE_COMPUTE_BIT |
-                                             VK_QUEUE_TRANSFER_BIT))
+  if (!has_queue_family_with_bitmask (vk_physical_device,
+                                      VK_QUEUE_COMPUTE_BIT |
+                                      VK_QUEUE_TRANSFER_BIT))
     {
       g_debug ("[HWAccel.Vulkan] Skipping device. Missing device queue family "
                "with (VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT) bitmask");
@@ -684,7 +684,7 @@ free_spirv_sources (GrdHwAccelVulkan *hwaccel_vulkan)
 {
   GrdVkSPIRVSources *spirv_sources = &hwaccel_vulkan->spirv_sources;
 
-  g_clear_pointer (&spirv_sources->avc_stereo_view, spirv_source_free);
+  g_clear_pointer (&spirv_sources->avc_dual_view, spirv_source_free);
 }
 
 static void
@@ -743,12 +743,12 @@ static void
 load_spirv_sources (GrdHwAccelVulkan *hwaccel_vulkan)
 {
   GrdVkSPIRVSources *spirv_sources = &hwaccel_vulkan->spirv_sources;
-  g_autofree char *avc_stereo_view_path = NULL;
+  g_autofree char *avc_dual_view_path = NULL;
   g_autoptr (GError) error = NULL;
 
-  avc_stereo_view_path = g_strdup_printf ("%s/grd-avc-stereo-view_opt.spv",
-                                          GRD_SHADER_DIR);
-  if (!load_spirv_source (avc_stereo_view_path, &spirv_sources->avc_stereo_view,
+  avc_dual_view_path = g_strdup_printf ("%s/grd-avc-dual-view_opt.spv",
+                                        GRD_SHADER_DIR);
+  if (!load_spirv_source (avc_dual_view_path, &spirv_sources->avc_dual_view,
                           &error))
     g_error ("[HWAccel.Vulkan] Failed to load shader: %s", error->message);
 }

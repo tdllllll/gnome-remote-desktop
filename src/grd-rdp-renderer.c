@@ -21,6 +21,7 @@
 
 #include "grd-rdp-renderer.h"
 
+#include "grd-context.h"
 #include "grd-encode-session.h"
 #include "grd-hwaccel-nvidia.h"
 #include "grd-hwaccel-vaapi.h"
@@ -31,6 +32,7 @@
 #include "grd-rdp-render-context.h"
 #include "grd-rdp-surface.h"
 #include "grd-rdp-surface-renderer.h"
+#include "grd-rdp-sw-encoder-ca.h"
 #include "grd-rdp-view-creator.h"
 #include "grd-session-rdp.h"
 
@@ -51,9 +53,11 @@ struct _GrdRdpRenderer
   gboolean in_shutdown;
 
   GrdSessionRdp *session_rdp;
+  GrdEglThread *egl_thread;
   GrdVkDevice *vk_device;
   GrdHwAccelNvidia *hwaccel_nvidia;
   GrdHwAccelVaapi *hwaccel_vaapi;
+  GrdRdpSwEncoderCa *encoder_ca;
 
   GrdRdpGraphicsPipeline *graphics_pipeline;
   rdpContext *rdp_context;
@@ -194,12 +198,22 @@ grd_rdp_renderer_start (GrdRdpRenderer         *renderer,
                         GrdRdpGraphicsPipeline *graphics_pipeline,
                         rdpContext             *rdp_context)
 {
+  g_autoptr (GError) error = NULL;
+
   renderer->graphics_pipeline = graphics_pipeline;
   renderer->rdp_context = rdp_context;
 
   if (hwaccel_vulkan &&
       !maybe_initialize_hardware_acceleration (renderer, hwaccel_vulkan))
     return FALSE;
+
+  renderer->encoder_ca = grd_rdp_sw_encoder_ca_new (&error);
+  if (!renderer->encoder_ca)
+    {
+      g_warning ("[RDP] Failed to create fallback software renderer: %s",
+                 error->message);
+      return FALSE;
+    }
 
   renderer->graphics_thread = g_thread_new ("RDP graphics thread",
                                             graphics_thread_func,
@@ -502,8 +516,10 @@ grd_rdp_renderer_try_acquire_render_context (GrdRdpRenderer            *renderer
 
   render_context = grd_rdp_render_context_new (renderer->graphics_pipeline,
                                                rdp_surface,
+                                               renderer->egl_thread,
                                                renderer->vk_device,
-                                               renderer->hwaccel_vaapi);
+                                               renderer->hwaccel_vaapi,
+                                               renderer->encoder_ca);
   if (!render_context)
     {
       handle_graphics_subsystem_failure (renderer);
@@ -607,10 +623,14 @@ GrdRdpRenderer *
 grd_rdp_renderer_new (GrdSessionRdp    *session_rdp,
                       GrdHwAccelNvidia *hwaccel_nvidia)
 {
+  GrdSession *session = GRD_SESSION (session_rdp);
+  GrdContext *context = grd_session_get_context (session);
+  GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
   GrdRdpRenderer *renderer;
 
   renderer = g_object_new (GRD_TYPE_RDP_RENDERER, NULL);
   renderer->session_rdp = session_rdp;
+  renderer->egl_thread = egl_thread;
   renderer->hwaccel_nvidia = hwaccel_nvidia;
 
   return renderer;
@@ -679,6 +699,7 @@ grd_rdp_renderer_dispose (GObject *object)
 
   g_assert (g_hash_table_size (renderer->surface_renderer_table) == 0);
 
+  g_clear_object (&renderer->encoder_ca);
   g_clear_object (&renderer->hwaccel_vaapi);
   g_clear_object (&renderer->vk_device);
 
@@ -796,8 +817,11 @@ encode_image_views (GrdRdpRenderer *renderer,
         grd_rdp_frame_get_render_context (rdp_frame);
       GrdEncodeSession *encode_session =
         grd_rdp_render_context_get_encode_session (render_context);
+      GrdEncodeContext *encode_context =
+        grd_rdp_frame_get_encode_context (rdp_frame);
 
-      if (!grd_encode_session_encode_frame (encode_session, image_view, &error))
+      if (!grd_encode_session_encode_frame (encode_session, encode_context,
+                                            image_view, &error))
         {
           g_warning ("[RDP] Failed to encode frame: %s", error->message);
 

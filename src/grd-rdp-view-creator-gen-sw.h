@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Pascal Nowack
+ * Copyright (C) 2025 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -17,27 +17,18 @@
  * 02111-1307, USA.
  */
 
-#include "config.h"
+#ifndef GRD_RDP_VIEW_CREATOR_GEN_SW_H
+#define GRD_RDP_VIEW_CREATOR_GEN_SW_H
 
-#include "grd-image-view.h"
+#include <stdint.h>
 
-G_DEFINE_ABSTRACT_TYPE (GrdImageView, grd_image_view,
-                        G_TYPE_OBJECT)
+#include "grd-rdp-view-creator.h"
 
-void
-grd_image_view_notify_image_view_release (GrdImageView *image_view)
-{
-  GrdImageViewClass *klass = GRD_IMAGE_VIEW_GET_CLASS (image_view);
+#define GRD_TYPE_RDP_VIEW_CREATOR_GEN_SW (grd_rdp_view_creator_gen_sw_get_type ())
+G_DECLARE_FINAL_TYPE (GrdRdpViewCreatorGenSW, grd_rdp_view_creator_gen_sw,
+                      GRD, RDP_VIEW_CREATOR_GEN_SW, GrdRdpViewCreator)
 
-  klass->notify_image_view_release (image_view);
-}
+GrdRdpViewCreatorGenSW *grd_rdp_view_creator_gen_sw_new (uint32_t surface_width,
+                                                         uint32_t surface_height);
 
-static void
-grd_image_view_init (GrdImageView *image_view)
-{
-}
-
-static void
-grd_image_view_class_init (GrdImageViewClass *klass)
-{
-}
+#endif /* GRD_RDP_VIEW_CREATOR_GEN_SW_H */

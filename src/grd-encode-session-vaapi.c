@@ -1223,6 +1223,7 @@ prepare_next_frame (GrdEncodeSessionVaapi *encode_session_vaapi,
 
 static gboolean
 grd_encode_session_vaapi_encode_frame (GrdEncodeSession  *encode_session,
+                                       GrdEncodeContext  *encode_context,
                                        GrdImageView      *image_view,
                                        GError           **error)
 {
@@ -1593,9 +1594,9 @@ create_avc420_encode_session (GrdEncodeSessionVaapi  *encode_session_vaapi,
 
   config_attributes[2].type = VAConfigAttribEncPackedHeaders;
   config_attributes[2].value = VA_ENC_PACKED_HEADER_SEQUENCE |
-                              VA_ENC_PACKED_HEADER_PICTURE |
-                              VA_ENC_PACKED_HEADER_SLICE |
-                              VA_ENC_PACKED_HEADER_RAW_DATA;
+                               VA_ENC_PACKED_HEADER_PICTURE |
+                               VA_ENC_PACKED_HEADER_SLICE |
+                               VA_ENC_PACKED_HEADER_RAW_DATA;
 
   va_status = vaCreateConfig (encode_session_vaapi->va_display,
                               VAProfileH264High, VAEntrypointEncSlice,

@@ -17,26 +17,40 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_FRAME_STATS_H
-#define GRD_RDP_FRAME_STATS_H
+#include "config.h"
+
+#include "grd-encode-context.h"
 
 #include <glib.h>
-#include <stdint.h>
 
-#include "grd-types.h"
+struct _GrdEncodeContext
+{
+  cairo_region_t *damage_region;
+};
 
-GrdRdpFrameStats *grd_rdp_frame_stats_new (uint32_t missing_dual_frame_acks,
-                                           uint32_t enc_rate,
-                                           uint32_t ack_rate);
+cairo_region_t *
+grd_encode_context_get_damage_region (GrdEncodeContext *encode_context)
+{
+  return encode_context->damage_region;
+}
 
-void grd_rdp_frame_stats_free (GrdRdpFrameStats *frame_stats);
+void
+grd_encode_context_set_damage_region (GrdEncodeContext *encode_context,
+                                      cairo_region_t   *damage_region)
+{
+  encode_context->damage_region = cairo_region_reference (damage_region);
+}
 
-uint32_t grd_rdp_frame_stats_get_missing_dual_frame_acks (GrdRdpFrameStats *frame_stats);
+GrdEncodeContext *
+grd_encode_context_new (void)
+{
+  return g_new0 (GrdEncodeContext, 1);
+}
 
-uint32_t grd_rdp_frame_stats_get_enc_rate (GrdRdpFrameStats *frame_stats);
+void
+grd_encode_context_free (GrdEncodeContext *encode_context)
+{
+  g_clear_pointer (&encode_context->damage_region, cairo_region_destroy);
 
-uint32_t grd_rdp_frame_stats_get_ack_rate (GrdRdpFrameStats *frame_stats);
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (GrdRdpFrameStats, grd_rdp_frame_stats_free)
-
-#endif /* GRD_RDP_FRAME_STATS_H */
+  g_free (encode_context);
+}

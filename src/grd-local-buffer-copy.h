@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Pascal Nowack
+ * Copyright (C) 2025 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -17,27 +17,16 @@
  * 02111-1307, USA.
  */
 
-#include "config.h"
+#ifndef GRD_LOCAL_BUFFER_COPY_H
+#define GRD_LOCAL_BUFFER_COPY_H
 
-#include "grd-image-view.h"
+#include "grd-local-buffer.h"
 
-G_DEFINE_ABSTRACT_TYPE (GrdImageView, grd_image_view,
-                        G_TYPE_OBJECT)
+#define GRD_TYPE_LOCAL_BUFFER_COPY (grd_local_buffer_copy_get_type ())
+G_DECLARE_FINAL_TYPE (GrdLocalBufferCopy, grd_local_buffer_copy,
+                      GRD, LOCAL_BUFFER_COPY, GrdLocalBuffer)
 
-void
-grd_image_view_notify_image_view_release (GrdImageView *image_view)
-{
-  GrdImageViewClass *klass = GRD_IMAGE_VIEW_GET_CLASS (image_view);
+GrdLocalBufferCopy *grd_local_buffer_copy_new (uint32_t buffer_width,
+                                               uint32_t buffer_height);
 
-  klass->notify_image_view_release (image_view);
-}
-
-static void
-grd_image_view_init (GrdImageView *image_view)
-{
-}
-
-static void
-grd_image_view_class_init (GrdImageViewClass *klass)
-{
-}
+#endif /* GRD_LOCAL_BUFFER_COPY_H */
