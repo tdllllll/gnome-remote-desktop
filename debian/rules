@@ -35,4 +35,7 @@ endif
 override_dh_installsystemduser:
 	dh_installsystemduser --no-enable
 
+override_dh_installsystemd:
+	dh_installsystemd --no-enable
+
 override_dh_gnome_clean:
