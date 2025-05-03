@@ -1,10 +1,11 @@
 gnome-remote-desktop (48.1-1) unstable; urgency=medium
 
+  [ Jeremy Bícha ]
   * New upstream release
   * Don't automatically enable the systemd system service (Closes: #1070644)
   * Salsa CI: Disable build tests to avoid inability to run the TPM test
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 01 May 2025 17:34:24 -0400
+ -- Matthias Geiger <werdahias@debian.org>  Sat, 03 May 2025 14:15:02 +0200
 
 gnome-remote-desktop (48.0-1) unstable; urgency=medium
 
