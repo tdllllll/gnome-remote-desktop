@@ -1,3 +1,10 @@
+gnome-remote-desktop (48.1-2) unstable; urgency=medium
+
+  [ Jeremy Bícha ]
+  * postinst: Remove accidental copy of rygel.postinst
+
+ -- Laurent Bigonville <bigon@debian.org>  Tue, 13 May 2025 16:01:58 +0200
+
 gnome-remote-desktop (48.1-1) unstable; urgency=medium
 
   [ Jeremy Bícha ]
