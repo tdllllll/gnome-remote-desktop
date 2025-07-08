@@ -1,1 +1,2 @@
 fdkaac.patch
+rdp-renderer-Clear-VkDevice-when-vaapi-initialization-fai.patch
