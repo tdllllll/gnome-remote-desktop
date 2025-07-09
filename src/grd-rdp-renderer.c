@@ -26,9 +26,8 @@
 #include "grd-hwaccel-nvidia.h"
 #include "grd-hwaccel-vaapi.h"
 #include "grd-hwaccel-vulkan.h"
+#include "grd-rdp-dvc-graphics-pipeline.h"
 #include "grd-rdp-frame.h"
-#include "grd-rdp-graphics-pipeline.h"
-#include "grd-rdp-private.h"
 #include "grd-rdp-render-context.h"
 #include "grd-rdp-surface.h"
 #include "grd-rdp-surface-renderer.h"
@@ -59,7 +58,7 @@ struct _GrdRdpRenderer
   GrdHwAccelVaapi *hwaccel_vaapi;
   GrdRdpSwEncoderCa *encoder_ca;
 
-  GrdRdpGraphicsPipeline *graphics_pipeline;
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline;
   rdpContext *rdp_context;
 
   GThread *graphics_thread;
@@ -187,16 +186,19 @@ maybe_initialize_hardware_acceleration (GrdRdpRenderer   *renderer,
   renderer->hwaccel_vaapi = grd_hwaccel_vaapi_new (renderer->vk_device,
                                                    &error);
   if (!renderer->hwaccel_vaapi)
-    g_message ("[RDP] Did not initialize VAAPI: %s", error->message);
+    {
+      g_message ("[RDP] Did not initialize VAAPI: %s", error->message);
+      g_clear_object (&renderer->vk_device);
+    }
 
   return TRUE;
 }
 
 gboolean
-grd_rdp_renderer_start (GrdRdpRenderer         *renderer,
-                        GrdHwAccelVulkan       *hwaccel_vulkan,
-                        GrdRdpGraphicsPipeline *graphics_pipeline,
-                        rdpContext             *rdp_context)
+grd_rdp_renderer_start (GrdRdpRenderer            *renderer,
+                        GrdHwAccelVulkan          *hwaccel_vulkan,
+                        GrdRdpDvcGraphicsPipeline *graphics_pipeline,
+                        rdpContext                *rdp_context)
 {
   g_autoptr (GError) error = NULL;
 
@@ -394,9 +396,9 @@ maybe_reset_graphics (GrdRdpRenderer *renderer)
         monitor_def->flags = MONITOR_PRIMARY;
     }
 
-  grd_rdp_graphics_pipeline_reset_graphics (renderer->graphics_pipeline,
-                                            desktop_width, desktop_height,
-                                            monitor_defs, n_monitors);
+  grd_rdp_dvc_graphics_pipeline_reset_graphics (renderer->graphics_pipeline,
+                                                desktop_width, desktop_height,
+                                                monitor_defs, n_monitors);
   renderer->pending_gfx_graphics_reset = FALSE;
 }
 
@@ -614,9 +616,9 @@ grd_rdp_renderer_render_frame (GrdRdpRenderer      *renderer,
                                GrdRdpRenderContext *render_context,
                                GrdRdpLegacyBuffer  *buffer)
 {
-  return grd_rdp_graphics_pipeline_refresh_gfx (renderer->graphics_pipeline,
-                                                rdp_surface, render_context,
-                                                buffer);
+  return grd_rdp_dvc_graphics_pipeline_refresh_gfx (renderer->graphics_pipeline,
+                                                    rdp_surface, render_context,
+                                                    buffer);
 }
 
 GrdRdpRenderer *
@@ -972,8 +974,8 @@ submit_rendered_frames (GrdRdpRenderer *renderer,
     {
       GrdRdpFrame *rdp_frame = l->data;
 
-      grd_rdp_graphics_pipeline_submit_frame (renderer->graphics_pipeline,
-                                              rdp_frame);
+      grd_rdp_dvc_graphics_pipeline_submit_frame (renderer->graphics_pipeline,
+                                                  rdp_frame);
       grd_rdp_frame_notify_frame_submission (rdp_frame);
     }
 }

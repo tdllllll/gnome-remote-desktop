@@ -31,13 +31,15 @@
 
 #include "grd-clipboard-rdp.h"
 #include "grd-context.h"
-#include "grd-rdp-audio-input.h"
-#include "grd-rdp-audio-playback.h"
 #include "grd-rdp-cursor-renderer.h"
-#include "grd-rdp-display-control.h"
-#include "grd-rdp-dvc.h"
+#include "grd-rdp-dvc-audio-input.h"
+#include "grd-rdp-dvc-audio-playback.h"
+#include "grd-rdp-dvc-display-control.h"
+#include "grd-rdp-dvc-graphics-pipeline.h"
+#include "grd-rdp-dvc-handler.h"
+#include "grd-rdp-dvc-input.h"
+#include "grd-rdp-dvc-telemetry.h"
 #include "grd-rdp-event-queue.h"
-#include "grd-rdp-graphics-pipeline.h"
 #include "grd-rdp-layout-manager.h"
 #include "grd-rdp-network-autodetection.h"
 #include "grd-rdp-private.h"
@@ -45,7 +47,6 @@
 #include "grd-rdp-sam.h"
 #include "grd-rdp-server.h"
 #include "grd-rdp-session-metrics.h"
-#include "grd-rdp-telemetry.h"
 #include "grd-settings.h"
 
 #define MAX_MONITOR_COUNT_HEADLESS 16
@@ -449,6 +450,12 @@ grd_session_rdp_tear_down_channel (GrdSessionRdp *session_rdp,
     case GRD_RDP_CHANNEL_DISPLAY_CONTROL:
       g_clear_object (&rdp_peer_context->display_control);
       break;
+    case GRD_RDP_CHANNEL_GRAPHICS_PIPELINE:
+      g_assert_not_reached ();
+      break;
+    case GRD_RDP_CHANNEL_INPUT:
+      g_clear_object (&rdp_peer_context->input);
+      break;
     case GRD_RDP_CHANNEL_TELEMETRY:
       g_clear_object (&rdp_peer_context->telemetry);
       break;
@@ -533,7 +540,7 @@ rdp_input_mouse_event (rdpInput *rdp_input,
   RdpPeerContext *rdp_peer_context = (RdpPeerContext *) rdp_input->context;
   GrdSessionRdp *session_rdp = rdp_peer_context->session_rdp;
   GrdRdpEventQueue *rdp_event_queue = session_rdp->rdp_event_queue;
-  GrdEventPointerMotionAbs motion_abs = {};
+  GrdEventMotionAbs motion_abs = {};
   GrdStream *stream = NULL;
   GrdButtonState button_state;
   int32_t button = 0;
@@ -1075,7 +1082,7 @@ rdp_peer_context_free (freerdp_peer   *peer,
   if (!rdp_peer_context)
     return;
 
-  g_clear_object (&rdp_peer_context->rdp_dvc);
+  g_clear_object (&rdp_peer_context->dvc_handler);
 
   if (rdp_peer_context->vcm != INVALID_HANDLE_VALUE)
     g_clear_pointer (&rdp_peer_context->vcm, WTSCloseServer);
@@ -1125,8 +1132,9 @@ rdp_peer_context_new (freerdp_peer   *peer,
       return FALSE;
     }
 
-  rdp_peer_context->rdp_dvc = grd_rdp_dvc_new (rdp_peer_context->vcm,
-                                               &rdp_peer_context->rdp_context);
+  rdp_peer_context->dvc_handler =
+    grd_rdp_dvc_handler_new (rdp_peer_context->vcm,
+                             &rdp_peer_context->rdp_context);
 
   return TRUE;
 }
@@ -1365,11 +1373,12 @@ socket_thread_func (gpointer data)
       if (peer->connected &&
           WTSVirtualChannelManagerIsChannelJoined (vcm, DRDYNVC_SVC_CHANNEL_NAME))
         {
-          GrdRdpTelemetry *telemetry;
-          GrdRdpGraphicsPipeline *graphics_pipeline;
-          GrdRdpAudioPlayback *audio_playback;
-          GrdRdpDisplayControl *display_control;
-          GrdRdpAudioInput *audio_input;
+          GrdRdpDvcTelemetry *telemetry;
+          GrdRdpDvcGraphicsPipeline *graphics_pipeline;
+          GrdRdpDvcInput *input;
+          GrdRdpDvcAudioPlayback *audio_playback;
+          GrdRdpDvcDisplayControl *display_control;
+          GrdRdpDvcAudioInput *audio_input;
 
           switch (WTSVirtualChannelManagerGetDrdynvcState (vcm))
             {
@@ -1384,20 +1393,23 @@ socket_thread_func (gpointer data)
               g_mutex_lock (&rdp_peer_context->channel_mutex);
               telemetry = rdp_peer_context->telemetry;
               graphics_pipeline = rdp_peer_context->graphics_pipeline;
+              input = rdp_peer_context->input;
               audio_playback = rdp_peer_context->audio_playback;
               display_control = rdp_peer_context->display_control;
               audio_input = rdp_peer_context->audio_input;
 
               if (telemetry && !session_rdp->session_should_stop)
-                grd_rdp_telemetry_maybe_init (telemetry);
+                grd_rdp_dvc_maybe_init (GRD_RDP_DVC (telemetry));
               if (graphics_pipeline && !session_rdp->session_should_stop)
-                grd_rdp_graphics_pipeline_maybe_init (graphics_pipeline);
+                grd_rdp_dvc_maybe_init (GRD_RDP_DVC (graphics_pipeline));
+              if (input && !session_rdp->session_should_stop)
+                grd_rdp_dvc_maybe_init (GRD_RDP_DVC (input));
               if (audio_playback && !session_rdp->session_should_stop)
-                grd_rdp_audio_playback_maybe_init (audio_playback);
+                grd_rdp_dvc_maybe_init (GRD_RDP_DVC (audio_playback));
               if (display_control && !session_rdp->session_should_stop)
-                grd_rdp_display_control_maybe_init (display_control);
+                grd_rdp_dvc_maybe_init (GRD_RDP_DVC (display_control));
               if (audio_input && !session_rdp->session_should_stop)
-                grd_rdp_audio_input_maybe_init (audio_input);
+                grd_rdp_dvc_maybe_init (GRD_RDP_DVC (audio_input));
               g_mutex_unlock (&rdp_peer_context->channel_mutex);
               break;
             }
@@ -1565,6 +1577,7 @@ grd_session_rdp_stop (GrdSession *session)
   g_clear_object (&rdp_peer_context->clipboard_rdp);
   g_clear_object (&rdp_peer_context->audio_playback);
   g_clear_object (&rdp_peer_context->display_control);
+  g_clear_object (&rdp_peer_context->input);
   g_clear_object (&rdp_peer_context->graphics_pipeline);
   g_clear_object (&rdp_peer_context->telemetry);
   g_mutex_unlock (&rdp_peer_context->channel_mutex);
@@ -1614,29 +1627,29 @@ initialize_graphics_pipeline (GrdSessionRdp *session_rdp)
 {
   rdpContext *rdp_context = session_rdp->peer->context;
   RdpPeerContext *rdp_peer_context = (RdpPeerContext *) rdp_context;
-  GrdRdpGraphicsPipeline *graphics_pipeline;
-  GrdRdpTelemetry *telemetry;
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline;
+  GrdRdpDvcTelemetry *telemetry;
 
   g_assert (!rdp_peer_context->telemetry);
   g_assert (!rdp_peer_context->graphics_pipeline);
 
-  telemetry = grd_rdp_telemetry_new (session_rdp,
-                                     rdp_peer_context->rdp_dvc,
-                                     rdp_peer_context->vcm,
-                                     rdp_context);
+  telemetry = grd_rdp_dvc_telemetry_new (session_rdp,
+                                         rdp_peer_context->dvc_handler,
+                                         rdp_peer_context->vcm,
+                                         rdp_context);
   rdp_peer_context->telemetry = telemetry;
 
   graphics_pipeline =
-    grd_rdp_graphics_pipeline_new (session_rdp,
-                                   session_rdp->renderer,
-                                   rdp_peer_context->rdp_dvc,
-                                   rdp_peer_context->vcm,
-                                   rdp_context,
-                                   rdp_peer_context->network_autodetection,
-                                   rdp_peer_context->encode_stream,
-                                   rdp_peer_context->rfx_context);
-  grd_rdp_graphics_pipeline_set_hwaccel_nvidia (graphics_pipeline,
-                                                session_rdp->hwaccel_nvidia);
+    grd_rdp_dvc_graphics_pipeline_new (session_rdp,
+                                       session_rdp->renderer,
+                                       rdp_peer_context->dvc_handler,
+                                       rdp_peer_context->vcm,
+                                       rdp_context,
+                                       rdp_peer_context->network_autodetection,
+                                       rdp_peer_context->encode_stream,
+                                       rdp_peer_context->rfx_context);
+  grd_rdp_dvc_graphics_pipeline_set_hwaccel_nvidia (graphics_pipeline,
+                                                    session_rdp->hwaccel_nvidia);
   rdp_peer_context->graphics_pipeline = graphics_pipeline;
 }
 
@@ -1646,17 +1659,21 @@ initialize_remaining_virtual_channels (GrdSessionRdp *session_rdp)
   rdpContext *rdp_context = session_rdp->peer->context;
   RdpPeerContext *rdp_peer_context = (RdpPeerContext *) rdp_context;
   rdpSettings *rdp_settings = rdp_context->settings;
-  GrdRdpDvc *rdp_dvc = rdp_peer_context->rdp_dvc;
+  GrdRdpDvcHandler *dvc_handler = rdp_peer_context->dvc_handler;
   HANDLE vcm = rdp_peer_context->vcm;
+
+  rdp_peer_context->input =
+    grd_rdp_dvc_input_new (session_rdp->layout_manager,
+                           session_rdp, dvc_handler, vcm);
 
   if (session_rdp->screen_share_mode == GRD_RDP_SCREEN_SHARE_MODE_EXTEND)
     {
       rdp_peer_context->display_control =
-        grd_rdp_display_control_new (session_rdp->layout_manager,
-                                     session_rdp,
-                                     rdp_peer_context->rdp_dvc,
-                                     rdp_peer_context->vcm,
-                                     get_max_monitor_count (session_rdp));
+        grd_rdp_dvc_display_control_new (session_rdp->layout_manager,
+                                         session_rdp,
+                                         dvc_handler,
+                                         rdp_peer_context->vcm,
+                                         get_max_monitor_count (session_rdp));
     }
   if (WTSVirtualChannelManagerIsChannelJoined (vcm, CLIPRDR_SVC_CHANNEL_NAME))
     {
@@ -1672,12 +1689,14 @@ initialize_remaining_virtual_channels (GrdSessionRdp *session_rdp)
       !freerdp_settings_get_bool (rdp_settings, FreeRDP_RemoteConsoleAudio))
     {
       rdp_peer_context->audio_playback =
-        grd_rdp_audio_playback_new (session_rdp, rdp_dvc, vcm, rdp_context);
+        grd_rdp_dvc_audio_playback_new (session_rdp, dvc_handler, vcm,
+                                        rdp_context);
     }
   if (freerdp_settings_get_bool (rdp_settings, FreeRDP_AudioCapture))
     {
       rdp_peer_context->audio_input =
-        grd_rdp_audio_input_new (session_rdp, rdp_dvc, vcm, rdp_context);
+        grd_rdp_dvc_audio_input_new (session_rdp, dvc_handler, vcm,
+                                     rdp_context);
     }
 }
 
@@ -1704,7 +1723,8 @@ grd_session_rdp_remote_desktop_session_started (GrdSession *session)
   GrdSessionRdp *session_rdp = GRD_SESSION_RDP (session);
   rdpContext *rdp_context = session_rdp->peer->context;
   RdpPeerContext *rdp_peer_context = (RdpPeerContext *) rdp_context;
-  GrdRdpGraphicsPipeline *graphics_pipeline = rdp_peer_context->graphics_pipeline;
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline =
+    rdp_peer_context->graphics_pipeline;
 
   if (!grd_rdp_renderer_start (session_rdp->renderer,
                                session_rdp->hwaccel_vulkan,

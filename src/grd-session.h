@@ -66,7 +66,7 @@ typedef enum _GrdPointerAxis
   GRD_POINTER_AXIS_HORIZONTAL
 } GrdPointerAxis;
 
-typedef struct _GrdEventPointerMotionAbs
+typedef struct
 {
   /* Size of the input region */
   uint32_t input_rect_width;
@@ -75,7 +75,7 @@ typedef struct _GrdEventPointerMotionAbs
   /* Absolute pointer position in the input region */
   double x;
   double y;
-} GrdEventPointerMotionAbs;
+} GrdEventMotionAbs;
 
 struct _GrdSessionClass
 {
@@ -128,9 +128,34 @@ void grd_session_notify_pointer_axis_discrete (GrdSession     *session,
                                                GrdPointerAxis  axis,
                                                int             steps);
 
-void grd_session_notify_pointer_motion_absolute (GrdSession                     *session,
-                                                 GrdStream                      *stream,
-                                                 const GrdEventPointerMotionAbs *motion_abs);
+void grd_session_notify_pointer_motion_absolute (GrdSession              *session,
+                                                 GrdStream               *stream,
+                                                 const GrdEventMotionAbs *motion_abs);
+
+gboolean grd_session_has_touch_device (GrdSession *session);
+
+GrdTouchContact *grd_session_acquire_touch_contact (GrdSession *session);
+
+void grd_session_release_touch_contact (GrdSession      *session,
+                                        GrdTouchContact *touch_contact);
+
+void grd_session_notify_touch_down (GrdSession              *session,
+                                    const GrdTouchContact   *touch_contact,
+                                    GrdStream               *stream,
+                                    const GrdEventMotionAbs *motion_abs);
+
+void grd_session_notify_touch_motion (GrdSession              *session,
+                                      const GrdTouchContact   *touch_contact,
+                                      GrdStream               *stream,
+                                      const GrdEventMotionAbs *motion_abs);
+
+void grd_session_notify_touch_up (GrdSession      *session,
+                                  GrdTouchContact *touch_contact);
+
+void grd_session_notify_touch_cancel (GrdSession      *session,
+                                      GrdTouchContact *touch_contact);
+
+void grd_session_notify_touch_device_frame (GrdSession *session);
 
 gboolean grd_session_enable_clipboard (GrdSession   *session,
                                        GrdClipboard *clipboard,

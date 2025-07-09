@@ -1,17 +1,17 @@
 project('gnome-remote-desktop', 'c',
-        version: '48.1',
-        meson_version: '>= 0.58.0',
+        version: '49.alpha',
+        meson_version: '>= 1.4.0',
         default_options: ['warning_level=1',
                           'buildtype=debugoptimized'])
 
 cuda_req = '>= 11.1.5.0'
 epoxy_req = '>= 1.4'
-freerdp_req = '>= 3.1.0'
+freerdp_req = '>= 3.15.0'
 fuse_req = '>= 3.9.1'
 polkit_req = '>= 122'
 vulkan_req = '>= 1.2.0'
 xkbcommon_req = '>= 1.0.0'
-libei_req = '>= 1.2.0'
+libei_req = '>= 1.3.901'
 
 gnome = import('gnome')
 i18n  = import('i18n')
@@ -113,6 +113,9 @@ cdata.set_quoted('GRD_CUSTOM_CONF', grd_custom_conf)
 cdata.set_quoted('GRD_DEFAULT_CONF', grd_default_conf)
 cdata.set_quoted('GRD_USERNAME', grd_username)
 cdata.set_quoted('GRD_SHADER_DIR', grd_shaderdir)
+
+# Workaround for https://github.com/FreeRDP/FreeRDP/issues/11412
+cdata.set('WITHOUT_FREERDP_3x_DEPRECATED', true)
 
 configure_file(input: 'config.h.meson',
                output: 'config.h',

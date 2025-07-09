@@ -17,6 +17,10 @@
  * 02111-1307, USA.
  */
 
+#include "config.h"
+
+#define G_LOG_DOMAIN "grd-test-client-rdp"
+
 #include <freerdp/client/cmdline.h>
 #include <freerdp/freerdp.h>
 #include <freerdp/gdi/gfx.h>

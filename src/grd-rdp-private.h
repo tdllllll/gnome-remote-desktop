@@ -38,16 +38,17 @@ typedef struct _RdpPeerContext
   /* Virtual Channel Manager */
   HANDLE vcm;
 
-  GrdRdpDvc *rdp_dvc;
+  GrdRdpDvcHandler *dvc_handler;
 
   GMutex channel_mutex;
 
   GrdClipboardRdp *clipboard_rdp;
-  GrdRdpAudioInput *audio_input;
-  GrdRdpAudioPlayback *audio_playback;
-  GrdRdpDisplayControl *display_control;
-  GrdRdpGraphicsPipeline *graphics_pipeline;
-  GrdRdpTelemetry *telemetry;
+  GrdRdpDvcAudioInput *audio_input;
+  GrdRdpDvcAudioPlayback *audio_playback;
+  GrdRdpDvcDisplayControl *display_control;
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline;
+  GrdRdpDvcInput *input;
+  GrdRdpDvcTelemetry *telemetry;
 } RdpPeerContext;
 
 #endif /* GRD_RDP_PRIVATE_H */
