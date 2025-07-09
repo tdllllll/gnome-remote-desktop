@@ -34,7 +34,7 @@ Build-Depends: asciidoc-base,
                libvulkan-dev (>= 1.2.0),
                libxkbcommon-dev (>= 1.0.0),
                meson (>= 1.4.0),
-               mutter (>= 48~beta) <!nocheck>,
+               mutter (>= 49~) <!nocheck>,
                openssl <!nocheck>,
                pipewire (>= 1.2.0) <!nocheck>,
                python3-dbus <!nocheck>,
@@ -51,7 +51,7 @@ Homepage: https://wiki.gnome.org/Projects/Mutter/RemoteDesktop
 Package: gnome-remote-desktop
 Architecture: linux-any
 Depends: fuse3,
-         libmutter-16-0 (>= 48~beta),
+         libmutter-17-0,
          pipewire (>= 1.2.0),
          systemd | systemd-sysusers,
          systemd | systemd-tmpfiles,
