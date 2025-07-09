@@ -17,23 +17,18 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_TELEMETRY_H
-#define GRD_RDP_TELEMETRY_H
+#ifndef GRD_RDP_DVC_AUDIO_INPUT_H
+#define GRD_RDP_DVC_AUDIO_INPUT_H
 
-#include <freerdp/server/telemetry.h>
-#include <glib-object.h>
+#include "grd-rdp-dvc.h"
 
-#include "grd-types.h"
+#define GRD_TYPE_RDP_DVC_AUDIO_INPUT (grd_rdp_dvc_audio_input_get_type ())
+G_DECLARE_FINAL_TYPE (GrdRdpDvcAudioInput, grd_rdp_dvc_audio_input,
+                      GRD, RDP_DVC_AUDIO_INPUT, GrdRdpDvc)
 
-#define GRD_TYPE_RDP_TELEMETRY (grd_rdp_telemetry_get_type ())
-G_DECLARE_FINAL_TYPE (GrdRdpTelemetry, grd_rdp_telemetry,
-                      GRD, RDP_TELEMETRY, GObject)
+GrdRdpDvcAudioInput *grd_rdp_dvc_audio_input_new (GrdSessionRdp    *session_rdp,
+                                                  GrdRdpDvcHandler *dvc_handler,
+                                                  HANDLE            vcm,
+                                                  rdpContext       *rdp_context);
 
-GrdRdpTelemetry *grd_rdp_telemetry_new (GrdSessionRdp *session_rdp,
-                                        GrdRdpDvc     *rdp_dvc,
-                                        HANDLE         vcm,
-                                        rdpContext    *rdp_context);
-
-void grd_rdp_telemetry_maybe_init (GrdRdpTelemetry *telemetry);
-
-#endif /* GRD_RDP_TELEMETRY_H */
+#endif /* GRD_RDP_DVC_AUDIO_INPUT_H */
