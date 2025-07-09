@@ -10,16 +10,16 @@ Upstream knows that we still need this patch, perhaps hoping that
 the additional pressure will help get fdk-aac into Debian
 but that is up to the ftpmasters, not the gnome-remote-desktop packagers
 ---
- config.h.meson               |  3 +++
- meson.build                  | 14 +++++++++++++-
- meson_options.txt            |  5 +++++
- src/grd-rdp-audio-playback.c |  4 ++++
- src/grd-rdp-dsp.c            | 25 ++++++++++++++++++++++++-
- src/meson.build              |  7 ++++++-
+ config.h.meson                   |  3 +++
+ meson.build                      | 14 +++++++++++++-
+ meson_options.txt                |  5 +++++
+ src/grd-rdp-dsp.c                | 25 ++++++++++++++++++++++++-
+ src/grd-rdp-dvc-audio-playback.c |  4 ++++
+ src/meson.build                  |  7 ++++++-
  6 files changed, 55 insertions(+), 3 deletions(-)
 
 diff --git a/config.h.meson b/config.h.meson
-index 439a12b..2febd94 100644
+index cafba4e..8e86a0d 100644
 --- a/config.h.meson
 +++ b/config.h.meson
 @@ -9,6 +9,9 @@
@@ -33,7 +33,7 @@ index 439a12b..2febd94 100644
  #mesondefine HAVE_RDP
  
 diff --git a/meson.build b/meson.build
-index ae8e375..2acd77d 100644
+index fb81fd1..2a8fc29 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -37,6 +37,7 @@ tss2_rc_dep = dependency('tss2-rc')
@@ -62,7 +62,7 @@ index ae8e375..2acd77d 100644
    freerdp_dep = dependency('freerdp3', version: freerdp_req)
    freerdp_client_dep = dependency('freerdp-client3', version: freerdp_req)
    freerdp_server_dep = dependency('freerdp-server3', version: freerdp_req)
-@@ -61,6 +65,9 @@ if have_rdp
+@@ -62,6 +66,9 @@ if have_rdp
    polkit_dep = dependency('polkit-gobject-1', version: polkit_req)
    vulkan_dep = dependency('vulkan', version: vulkan_req)
    winpr_dep = dependency('winpr3', version: freerdp_req)
@@ -72,7 +72,7 @@ index ae8e375..2acd77d 100644
  
    glslc = find_program('glslc', required: true)
    spirv_opt = find_program('spirv-opt', required: true)
-@@ -105,6 +112,7 @@ cdata.set_quoted('VERSION', meson.project_version())
+@@ -106,6 +113,7 @@ cdata.set_quoted('VERSION', meson.project_version())
  cdata.set('HAVE_LIBSYSTEMD', libsystemd_dep.found())
  cdata.set('HAVE_RDP', have_rdp)
  cdata.set('HAVE_VNC', have_vnc)
@@ -80,7 +80,7 @@ index ae8e375..2acd77d 100644
  
  cdata.set_quoted('GRD_DATA_DIR', grd_datadir)
  cdata.set_quoted('GRD_LIBEXEC_DIR', libexecdir)
-@@ -197,6 +205,10 @@ output = [
+@@ -201,6 +209,10 @@ output = [
    '        RDP...................... ' + have_rdp.to_string(),
    '        VNC...................... ' + have_vnc.to_string(),
    '',
@@ -107,32 +107,6 @@ index c003176..b0b279d 100644
  option('rdp',
         type: 'boolean',
         value: true,
-diff --git a/src/grd-rdp-audio-playback.c b/src/grd-rdp-audio-playback.c
-index 8422659..7293b83 100644
---- a/src/grd-rdp-audio-playback.c
-+++ b/src/grd-rdp-audio-playback.c
-@@ -541,7 +541,9 @@ static const AUDIO_FORMAT audio_format_pcm =
- 
- static AUDIO_FORMAT server_formats[] =
- {
-+#ifdef HAVE_FDK_AAC
-   audio_format_aac,
-+#endif /* HAVE_FDK_AAC */
-   audio_format_opus,
-   audio_format_pcm,
- };
-@@ -639,9 +641,11 @@ rdpsnd_activated (RdpsndServerContext *rdpsnd_context)
-     {
-       AUDIO_FORMAT *audio_format = &rdpsnd_context->client_formats[i];
- 
-+#ifdef HAVE_FDK_AAC
-       if (audio_playback->aac_client_format_idx < 0 &&
-           are_audio_formats_equal (audio_format, &audio_format_aac))
-         audio_playback->aac_client_format_idx = i;
-+#endif /* HAVE_FDK_AAC */
-       if (audio_playback->opus_client_format_idx < 0 &&
-           are_audio_formats_equal (audio_format, &audio_format_opus))
-         audio_playback->opus_client_format_idx = i;
 diff --git a/src/grd-rdp-dsp.c b/src/grd-rdp-dsp.c
 index f83d5c5..987316e 100644
 --- a/src/grd-rdp-dsp.c
@@ -247,11 +221,37 @@ index f83d5c5..987316e 100644
  
    G_OBJECT_CLASS (grd_rdp_dsp_parent_class)->dispose (object);
  }
+diff --git a/src/grd-rdp-dvc-audio-playback.c b/src/grd-rdp-dvc-audio-playback.c
+index 369d5c0..2e096f0 100644
+--- a/src/grd-rdp-dvc-audio-playback.c
++++ b/src/grd-rdp-dvc-audio-playback.c
+@@ -530,7 +530,9 @@ static const AUDIO_FORMAT audio_format_pcm =
+ 
+ static AUDIO_FORMAT server_formats[] =
+ {
++#ifdef HAVE_FDK_AAC
+   audio_format_aac,
++#endif /* HAVE_FDK_AAC */
+   audio_format_opus,
+   audio_format_pcm,
+ };
+@@ -628,9 +630,11 @@ rdpsnd_activated (RdpsndServerContext *rdpsnd_context)
+     {
+       AUDIO_FORMAT *audio_format = &rdpsnd_context->client_formats[i];
+ 
++#ifdef HAVE_FDK_AAC
+       if (audio_playback->aac_client_format_idx < 0 &&
+           are_audio_formats_equal (audio_format, &audio_format_aac))
+         audio_playback->aac_client_format_idx = i;
++#endif /* HAVE_FDK_AAC */
+       if (audio_playback->opus_client_format_idx < 0 &&
+           are_audio_formats_equal (audio_format, &audio_format_opus))
+         audio_playback->opus_client_format_idx = i;
 diff --git a/src/meson.build b/src/meson.build
-index bfc2b6a..938bdab 100644
+index c34b6dc..c30a743 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -216,7 +216,6 @@ if have_rdp
+@@ -246,7 +246,6 @@ if have_rdp
    deps += [
      cuda_dep,
      dl_dep,
@@ -259,7 +259,7 @@ index bfc2b6a..938bdab 100644
      freerdp_dep,
      freerdp_server_dep,
      fuse_dep,
-@@ -226,6 +225,12 @@ if have_rdp
+@@ -257,6 +256,12 @@ if have_rdp
      vulkan_dep,
      winpr_dep,
    ]
