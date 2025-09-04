@@ -33,11 +33,13 @@
 #include <unistd.h>
 
 #include "grd-enums.h"
+#include "grd-settings-headless.h"
 #include "grd-settings-system.h"
 #include "grd-settings-user.h"
 #include "grd-utils.h"
 
 #define GRD_SYSTEMD_SERVICE "gnome-remote-desktop.service"
+#define GRD_SYSTEMD_HEADLESS_SERVICE "gnome-remote-desktop-headless.service"
 
 typedef enum
 {
@@ -225,11 +227,10 @@ rdp_enable (GrdSettings  *settings,
             char        **argv,
             GError      **error)
 {
-  if (GRD_IS_SETTINGS_SYSTEM (settings))
-    {
-      if (!grd_toggle_systemd_unit (TRUE, error))
-        return FALSE;
-    }
+  GrdRuntimeMode runtime_mode = grd_settings_get_runtime_mode (settings);
+
+  if (!grd_toggle_systemd_unit (runtime_mode, TRUE, error))
+    return FALSE;
 
   g_object_set (G_OBJECT (settings), "rdp-enabled", TRUE, NULL);
 
@@ -242,13 +243,14 @@ rdp_disable (GrdSettings  *settings,
              char        **argv,
              GError      **error)
 {
-  if (GRD_IS_SETTINGS_SYSTEM (settings))
-    {
-      if (!grd_toggle_systemd_unit (FALSE, error))
-        return FALSE;
-    }
+  GrdRuntimeMode runtime_mode = grd_settings_get_runtime_mode (settings);
+  gboolean vnc_enabled;
 
   g_object_set (G_OBJECT (settings), "rdp-enabled", FALSE, NULL);
+
+  g_object_get (G_OBJECT (settings), "vnc-enabled", &vnc_enabled, NULL);
+  if (!vnc_enabled)
+    return grd_toggle_systemd_unit (runtime_mode, FALSE, error);
 
   return TRUE;
 }
@@ -431,6 +433,11 @@ vnc_enable (GrdSettings  *settings,
             char        **argv,
             GError      **error)
 {
+  GrdRuntimeMode runtime_mode = grd_settings_get_runtime_mode (settings);
+
+  if (!grd_toggle_systemd_unit (runtime_mode, TRUE, error))
+    return FALSE;
+
   g_object_set (G_OBJECT (settings), "vnc-enabled", TRUE, NULL);
   return TRUE;
 }
@@ -441,7 +448,15 @@ vnc_disable (GrdSettings  *settings,
              char        **argv,
              GError      **error)
 {
+  GrdRuntimeMode runtime_mode = grd_settings_get_runtime_mode (settings);
+  gboolean rdp_enabled;
+
   g_object_set (G_OBJECT (settings), "vnc-enabled", FALSE, NULL);
+
+  g_object_get (G_OBJECT (settings), "rdp-enabled", &rdp_enabled, NULL);
+  if (!rdp_enabled)
+    return grd_toggle_systemd_unit (runtime_mode, FALSE, error);
+
   return TRUE;
 }
 
@@ -639,8 +654,10 @@ print_help (void)
     _("  status [--show-credentials]                - Show current status\n"
       "\n"
       "Options:\n"
-      "  --headless                                 - Use headless credentials storage\n"
+      "  --headless                                 - Configure headless daemon\n"
+      "                                               running on a user session\n"
       "  --system                                   - Configure system daemon\n"
+      "                                               for remote login\n"
       "  --help                                     - Print this help text\n");
 
   print_usage ();
@@ -668,8 +685,9 @@ create_settings (GrdRuntimeMode runtime_mode)
   switch (runtime_mode)
     {
     case GRD_RUNTIME_MODE_SCREEN_SHARE:
+      return GRD_SETTINGS (grd_settings_user_new ());
     case GRD_RUNTIME_MODE_HEADLESS:
-      return GRD_SETTINGS (grd_settings_user_new (runtime_mode));
+      return GRD_SETTINGS (grd_settings_headless_new ());
     case GRD_RUNTIME_MODE_SYSTEM:
       return GRD_SETTINGS (grd_settings_system_new ());
     case GRD_RUNTIME_MODE_HANDOVER:
@@ -732,11 +750,10 @@ print_rdp_status (GrdSettings *settings,
   printf ("\tTLS certificate: %s\n", tls_cert);
   printf ("\tTLS fingerprint: %s\n", tls_fingerprint);
   printf ("\tTLS key: %s\n", tls_key);
+  if (!GRD_IS_SETTINGS_SYSTEM (settings) && !GRD_IS_SETTINGS_HEADLESS (settings))
+     printf ("\tView-only: %s\n", view_only ? "yes" : "no");
   if (!GRD_IS_SETTINGS_SYSTEM (settings))
-    {
-      printf ("\tView-only: %s\n", view_only ? "yes" : "no");
-      printf ("\tNegotiate port: %s\n", negotiate_port ? "yes" : "no");
-    }
+    printf ("\tNegotiate port: %s\n", negotiate_port ? "yes" : "no");
 
   grd_settings_get_rdp_credentials (settings,
                                     &username, &password,
@@ -795,11 +812,15 @@ print_vnc_status (GrdSettings *settings,
   printf ("\tStatus: %s\n", status_to_string (enabled, use_colors));
 
   printf ("\tPort: %d\n", port);
-  if (auth_method == GRD_VNC_AUTH_METHOD_PROMPT)
-    printf ("\tAuth method: prompt\n");
-  else if (auth_method == GRD_VNC_AUTH_METHOD_PASSWORD)
-    printf ("\tAuth method: password\n");
-  printf ("\tView-only: %s\n", view_only ? "yes" : "no");
+  if (!GRD_IS_SETTINGS_HEADLESS (settings))
+    {
+      if (auth_method == GRD_VNC_AUTH_METHOD_PROMPT)
+        printf ("\tAuth method: prompt\n");
+      else if (auth_method == GRD_VNC_AUTH_METHOD_PASSWORD)
+        printf ("\tAuth method: password\n");
+    }
+  if (!GRD_IS_SETTINGS_HEADLESS (settings))
+    printf ("\tView-only: %s\n", view_only ? "yes" : "no");
   printf ("\tNegotiate port: %s\n", negotiate_port ? "yes" : "no");
   if (show_credentials)
     {
@@ -858,14 +879,28 @@ print_service_status (GrdSettings *settings,
   GrdSystemdUnitActiveState active_state;
   g_autofree char *active_state_str = NULL;
   g_autoptr (GDBusProxy) unit_proxy = NULL;
+  const char *unit;
 
-  if (GRD_IS_SETTINGS_SYSTEM (settings))
-      bus_type = G_BUS_TYPE_SYSTEM;
-  else
+  switch (grd_settings_get_runtime_mode (settings))
+    {
+    case GRD_RUNTIME_MODE_HEADLESS:
       bus_type = G_BUS_TYPE_SESSION;
+      unit = GRD_SYSTEMD_HEADLESS_SERVICE;
+      break;
+    case GRD_RUNTIME_MODE_SYSTEM:
+      bus_type = G_BUS_TYPE_SYSTEM;
+      unit = GRD_SYSTEMD_SERVICE;
+      break;
+    case GRD_RUNTIME_MODE_SCREEN_SHARE:
+      bus_type = G_BUS_TYPE_SESSION;
+      unit = GRD_SYSTEMD_SERVICE;
+      break;
+    default:
+      g_assert_not_reached ();
+    }
 
   if (!grd_systemd_get_unit (bus_type,
-                             GRD_SYSTEMD_SERVICE,
+                             unit,
                              &unit_proxy,
                              NULL))
     return;

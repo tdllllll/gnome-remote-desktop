@@ -642,6 +642,43 @@ rdp_input_extended_mouse_event (rdpInput *rdp_input,
   return TRUE;
 }
 
+static BOOL
+rdp_input_rel_mouse_event (rdpInput *rdp_input,
+                           uint16_t  flags,
+                           int16_t   dx,
+                           int16_t   dy)
+{
+  RdpPeerContext *rdp_peer_context = (RdpPeerContext *) rdp_input->context;
+  GrdSessionRdp *session_rdp = rdp_peer_context->session_rdp;
+  GrdRdpEventQueue *rdp_event_queue = session_rdp->rdp_event_queue;
+  GrdButtonState button_state;
+  int32_t button = 0;
+
+  grd_rdp_event_queue_add_input_event_pointer_motion (rdp_event_queue, dx, dy);
+
+  button_state = flags & PTR_FLAGS_DOWN ? GRD_BUTTON_STATE_PRESSED
+                                        : GRD_BUTTON_STATE_RELEASED;
+
+  if (flags & PTR_FLAGS_BUTTON1)
+    button = BTN_LEFT;
+  else if (flags & PTR_FLAGS_BUTTON2)
+    button = BTN_RIGHT;
+  else if (flags & PTR_FLAGS_BUTTON3)
+    button = BTN_MIDDLE;
+  else if (flags & PTR_XFLAGS_BUTTON1)
+    button = BTN_SIDE;
+  else if (flags & PTR_XFLAGS_BUTTON2)
+    button = BTN_EXTRA;
+
+  if (button)
+    {
+      grd_rdp_event_queue_add_input_event_pointer_button (rdp_event_queue,
+                                                          button, button_state);
+    }
+
+  return TRUE;
+}
+
 static gboolean
 is_pause_key_sequence (GrdSessionRdp *session_rdp,
                        uint16_t       vkcode,
@@ -994,6 +1031,8 @@ rdp_peer_post_connect (freerdp_peer *peer)
   RdpPeerContext *rdp_peer_context = (RdpPeerContext *) peer->context;
   GrdSessionRdp *session_rdp = rdp_peer_context->session_rdp;
   rdpSettings *rdp_settings = peer->context->settings;
+  uint32_t rdp_version =
+    freerdp_settings_get_uint32 (rdp_settings, FreeRDP_RdpVersion);
   uint32_t keyboard_type =
     freerdp_settings_get_uint32 (rdp_settings, FreeRDP_KeyboardType);
   uint32_t os_major_type =
@@ -1013,6 +1052,7 @@ rdp_peer_post_connect (freerdp_peer *peer)
   g_debug ("New RDP client: [OS major type, OS minor type]: [%s, %s]",
            freerdp_peer_os_major_type_string (peer),
            freerdp_peer_os_minor_type_string (peer));
+  g_debug ("[RDP] Maximum common RDP version 0x%08X", rdp_version);
   g_debug ("[RDP] Client uses keyboard type %u", keyboard_type);
 
   g_debug ("[RDP] Virtual Channels: compression flags: %u, "
@@ -1133,8 +1173,7 @@ rdp_peer_context_new (freerdp_peer   *peer,
     }
 
   rdp_peer_context->dvc_handler =
-    grd_rdp_dvc_handler_new (rdp_peer_context->vcm,
-                             &rdp_peer_context->rdp_context);
+    grd_rdp_dvc_handler_new (rdp_peer_context->vcm);
 
   return TRUE;
 }
@@ -1277,7 +1316,7 @@ init_rdp_session (GrdSessionRdp  *session_rdp,
 
   freerdp_settings_set_bool (rdp_settings, FreeRDP_HasExtendedMouseEvent, TRUE);
   freerdp_settings_set_bool (rdp_settings, FreeRDP_HasHorizontalWheel, TRUE);
-  freerdp_settings_set_bool (rdp_settings, FreeRDP_HasRelativeMouseEvent, FALSE);
+  freerdp_settings_set_bool (rdp_settings, FreeRDP_HasRelativeMouseEvent, TRUE);
   freerdp_settings_set_bool (rdp_settings, FreeRDP_HasQoeEvent, FALSE);
   freerdp_settings_set_bool (rdp_settings, FreeRDP_UnicodeInput, TRUE);
 
@@ -1295,6 +1334,7 @@ init_rdp_session (GrdSessionRdp  *session_rdp,
   rdp_input->SynchronizeEvent = rdp_input_synchronize_event;
   rdp_input->MouseEvent = rdp_input_mouse_event;
   rdp_input->ExtendedMouseEvent = rdp_input_extended_mouse_event;
+  rdp_input->RelMouseEvent = rdp_input_rel_mouse_event;
   rdp_input->KeyboardEvent = rdp_input_keyboard_event;
   rdp_input->UnicodeKeyboardEvent = rdp_input_unicode_keyboard_event;
 
@@ -1497,6 +1537,7 @@ grd_session_rdp_new (GrdRdpServer      *rdp_server,
   session_rdp->layout_manager =
     grd_rdp_layout_manager_new (session_rdp,
                                 session_rdp->renderer,
+                                hwaccel_vulkan,
                                 hwaccel_nvidia);
 
   if (!init_rdp_session (session_rdp, username, password, &error))
@@ -1739,7 +1780,8 @@ grd_session_rdp_remote_desktop_session_started (GrdSession *session)
                                                    GRD_RDP_PHASE_SESSION_STARTED);
   grd_rdp_layout_manager_notify_session_started (session_rdp->layout_manager,
                                                  session_rdp->cursor_renderer,
-                                                 rdp_context);
+                                                 rdp_context,
+                                                 session_rdp->screen_share_mode);
 }
 
 static void

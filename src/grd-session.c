@@ -92,6 +92,12 @@ struct _GrdTouchContact
   struct ei_touch *ei_touch_contact;
 };
 
+typedef struct _GrdEiPing
+{
+  GTask *task;
+  struct ei_ping *ping;
+} GrdEiPing;
+
 typedef struct _GrdSessionPrivate
 {
   GrdContext *context;
@@ -103,6 +109,7 @@ typedef struct _GrdSessionPrivate
 
   struct ei *ei;
   struct ei_seat *ei_seat;
+  struct ei_device *ei_pointer;
   struct ei_device *ei_abs_pointer;
   struct ei_device *ei_keyboard;
   struct ei_device *ei_touch;
@@ -125,9 +132,14 @@ typedef struct _GrdSessionPrivate
   gboolean num_lock_state;
   gulong caps_lock_state_changed_id;
   gulong num_lock_state_changed_id;
+
+  GHashTable *pings;
 } GrdSessionPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (GrdSession, grd_session, G_TYPE_OBJECT)
+
+static void
+finish_and_free_ping (GrdEiPing *ping);
 
 GrdContext *
 grd_session_get_context (GrdSession *session)
@@ -152,6 +164,7 @@ clear_ei (GrdSession *session)
   g_clear_pointer (&priv->ei_touch, ei_device_unref);
   g_clear_pointer (&priv->ei_keyboard, ei_device_unref);
   g_clear_pointer (&priv->ei_abs_pointer, ei_device_unref);
+  g_clear_pointer (&priv->ei_pointer, ei_device_unref);
   g_clear_pointer (&priv->ei_seat, ei_seat_unref);
   g_clear_pointer (&priv->ei_source, g_source_destroy);
   g_clear_pointer (&priv->ei, ei_unref);
@@ -204,6 +217,34 @@ grd_session_stop (GrdSession *session)
   clear_session (session);
 
   g_signal_emit (session, signals[STOPPED], 0);
+}
+
+gboolean
+grd_session_flush_input_finish (GrdSession    *session,
+                                GAsyncResult  *result,
+                                GError       **error)
+{
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+void
+grd_session_flush_input_async (GrdSession          *session,
+                               GCancellable        *cancellable,
+                               GAsyncReadyCallback  callback,
+                               gpointer             user_data)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+  GrdEiPing *ping;
+
+  ping = g_new0 (GrdEiPing, 1);
+  ping->task = g_task_new (session,
+                           cancellable,
+                           callback,
+                           user_data);
+  ping->ping = ei_new_ping (priv->ei);
+  ei_ping (ping->ping);
+
+  g_hash_table_insert (priv->pings, ping->ping, ping);
 }
 
 static void
@@ -637,6 +678,20 @@ grd_session_notify_pointer_axis_discrete (GrdSession    *session,
                              axis == GRD_POINTER_AXIS_HORIZONTAL ? steps * 120 : 0,
                              axis == GRD_POINTER_AXIS_VERTICAL ? steps * 120 : 0);
   ei_device_frame (priv->ei_abs_pointer, g_get_monotonic_time ());
+}
+
+void
+grd_session_notify_pointer_motion (GrdSession *session,
+                                   double      dx,
+                                   double      dy)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+
+  if (!priv->ei_pointer)
+    return;
+
+  ei_device_pointer_motion (priv->ei_pointer, dx, dy);
+  ei_device_frame (priv->ei_pointer, g_get_monotonic_time ());
 }
 
 static gboolean
@@ -1403,6 +1458,11 @@ grd_ei_source_dispatch (gpointer user_data)
                     return G_SOURCE_REMOVE;
                   }
               }
+            if (ei_device_has_capability (device, EI_DEVICE_CAP_POINTER))
+              {
+                g_clear_pointer (&priv->ei_pointer, ei_device_unref);
+                priv->ei_pointer = ei_device_ref (device);
+              }
             if (ei_device_has_capability (device, EI_DEVICE_CAP_POINTER_ABSOLUTE))
               {
                 maybe_dispose_ei_abs_pointer (session);
@@ -1418,6 +1478,8 @@ grd_ei_source_dispatch (gpointer user_data)
             break;
           }
         case EI_EVENT_DEVICE_RESUMED:
+          if (ei_event_get_device (event) == priv->ei_pointer)
+            ei_device_start_emulating (priv->ei_pointer, ++priv->ei_sequence);
           if (ei_event_get_device (event) == priv->ei_abs_pointer)
             ei_device_start_emulating (priv->ei_abs_pointer, ++priv->ei_sequence);
           if (ei_event_get_device (event) == priv->ei_keyboard)
@@ -1431,6 +1493,8 @@ grd_ei_source_dispatch (gpointer user_data)
         case EI_EVENT_DEVICE_PAUSED:
           break;
         case EI_EVENT_DEVICE_REMOVED:
+          if (ei_event_get_device (event) == priv->ei_pointer)
+            g_clear_pointer (&priv->ei_pointer, ei_device_unref);
           if (ei_event_get_device (event) == priv->ei_abs_pointer)
             maybe_dispose_ei_abs_pointer (session);
           if (ei_event_get_device (event) == priv->ei_keyboard)
@@ -1494,6 +1558,17 @@ grd_ei_source_dispatch (gpointer user_data)
                          "no keymap");
             }
           break;
+        case EI_EVENT_PONG:
+          {
+            GrdEiPing *ping = NULL;
+
+            if (g_hash_table_steal_extended (priv->pings,
+                                             ei_event_pong_get_ping (event),
+                                             NULL,
+                                             (gpointer *) &ping))
+              finish_and_free_ping (ping);
+            break;
+          }
         default:
           handled = FALSE;
           break;
@@ -1737,6 +1812,7 @@ grd_session_finalize (GObject *object)
   g_assert (!priv->ei_touch);
   g_assert (!priv->ei_keyboard);
   g_assert (!priv->ei_abs_pointer);
+  g_assert (!priv->ei_pointer);
   g_assert (!priv->ei_seat);
   g_assert (!priv->ei_source);
   g_assert (!priv->ei);
@@ -1788,6 +1864,34 @@ grd_session_get_property (GObject    *object,
 }
 
 static void
+grd_ei_ping_free (GrdEiPing *ping)
+{
+  g_object_unref (ping->task);
+  g_clear_pointer (&ping->ping, ei_ping_unref);
+  g_free (ping);
+}
+
+static void
+cancel_and_free_ping (gpointer user_data)
+{
+  GrdEiPing *ping = user_data;
+  GCancellable *cancellable;
+
+  cancellable = g_task_get_cancellable (ping->task);
+  if (!g_cancellable_is_cancelled (cancellable))
+    g_cancellable_cancel (cancellable);
+  grd_ei_ping_free (ping);
+}
+
+static void
+finish_and_free_ping (GrdEiPing *ping)
+{
+  if (!g_task_return_error_if_cancelled (ping->task))
+    g_task_return_boolean (ping->task, TRUE);
+  grd_ei_ping_free (ping);
+}
+
+static void
 grd_session_init (GrdSession *session)
 {
   GrdSessionPrivate *priv = grd_session_get_instance_private (session);
@@ -1800,6 +1904,9 @@ grd_session_init (GrdSession *session)
     g_hash_table_new_full (g_str_hash, g_str_equal,
                            g_free,
                            (GDestroyNotify) grd_region_free);
+
+  priv->pings = g_hash_table_new_full (NULL, NULL,
+                                       NULL, cancel_and_free_ping);
 }
 
 static void

@@ -17,11 +17,12 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_UTILS_H
-#define GRD_UTILS_H
+#pragma once
 
 #include <gio/gio.h>
 #include <stdint.h>
+
+#include "grd-enums.h"
 
 typedef enum
 {
@@ -86,8 +87,9 @@ gboolean grd_test_fd (int         fd,
                       GFileTest  *test_results,
                       GError    **error);
 
-gboolean grd_toggle_systemd_unit (gboolean   enabled,
-                                  GError   **error);
+gboolean grd_toggle_systemd_unit (GrdRuntimeMode   runtime_mode,
+                                  gboolean         enabled,
+                                  GError         **error);
 
 gboolean grd_systemd_get_unit (GBusType     bus_type,
                                const char  *unit,
@@ -97,5 +99,3 @@ gboolean grd_systemd_get_unit (GBusType     bus_type,
 gboolean grd_systemd_unit_get_active_state (GDBusProxy                 *unit_proxy,
                                             GrdSystemdUnitActiveState  *active_state,
                                             GError                    **error);
-
-#endif /* GRD_UTILS_H */

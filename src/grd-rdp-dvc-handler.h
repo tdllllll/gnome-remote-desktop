@@ -17,8 +17,7 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_DVC_HANDLER_H
-#define GRD_RDP_DVC_HANDLER_H
+#pragma once
 
 #include <freerdp/channels/wtsvc.h>
 #include <glib-object.h>
@@ -30,8 +29,7 @@ G_DECLARE_FINAL_TYPE (GrdRdpDvcHandler, grd_rdp_dvc_handler,
 typedef void (* GrdRdpDVCCreationStatusCallback) (gpointer user_data,
                                                   int32_t  creation_status);
 
-GrdRdpDvcHandler *grd_rdp_dvc_handler_new (HANDLE      vcm,
-                                           rdpContext *rdp_context);
+GrdRdpDvcHandler *grd_rdp_dvc_handler_new (HANDLE vcm);
 
 uint32_t grd_rdp_dvc_handler_subscribe_dvc_creation_status (GrdRdpDvcHandler                *dvc_handler,
                                                             uint32_t                         channel_id,
@@ -41,5 +39,3 @@ uint32_t grd_rdp_dvc_handler_subscribe_dvc_creation_status (GrdRdpDvcHandler    
 void grd_rdp_dvc_handler_unsubscribe_dvc_creation_status (GrdRdpDvcHandler *dvc_handler,
                                                           uint32_t          channel_id,
                                                           uint32_t          subscription_id);
-
-#endif /* GRD_RDP_DVC_HANDLER_H */
