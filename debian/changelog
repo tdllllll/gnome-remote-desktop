@@ -1,3 +1,9 @@
+gnome-remote-desktop (49~rc-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Thu, 04 Sep 2025 16:36:39 +0200
+
 gnome-remote-desktop (49~alpha-0ubuntu1) questing; urgency=medium
 
   * New upstream release
