@@ -33,7 +33,7 @@ index cafba4e..8e86a0d 100644
  #mesondefine HAVE_RDP
  
 diff --git a/meson.build b/meson.build
-index fb81fd1..2a8fc29 100644
+index 461cf9d..d4ad232 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -37,6 +37,7 @@ tss2_rc_dep = dependency('tss2-rc')
@@ -248,10 +248,10 @@ index 369d5c0..2e096f0 100644
            are_audio_formats_equal (audio_format, &audio_format_opus))
          audio_playback->opus_client_format_idx = i;
 diff --git a/src/meson.build b/src/meson.build
-index c34b6dc..c30a743 100644
+index 1b2cb93..53cedb9 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -246,7 +246,6 @@ if have_rdp
+@@ -248,7 +248,6 @@ if have_rdp
    deps += [
      cuda_dep,
      dl_dep,
@@ -259,7 +259,7 @@ index c34b6dc..c30a743 100644
      freerdp_dep,
      freerdp_server_dep,
      fuse_dep,
-@@ -257,6 +256,12 @@ if have_rdp
+@@ -259,6 +258,12 @@ if have_rdp
      vulkan_dep,
      winpr_dep,
    ]
