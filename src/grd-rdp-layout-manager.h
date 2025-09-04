@@ -17,11 +17,11 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_LAYOUT_MANAGER_H
-#define GRD_RDP_LAYOUT_MANAGER_H
+#pragma once
 
 #include <glib-object.h>
 
+#include "grd-enums.h"
 #include "grd-rdp-monitor-config.h"
 #include "grd-rdp-stream-owner.h"
 #include "grd-session.h"
@@ -32,11 +32,13 @@ G_DECLARE_FINAL_TYPE (GrdRdpLayoutManager, grd_rdp_layout_manager,
 
 GrdRdpLayoutManager *grd_rdp_layout_manager_new (GrdSessionRdp    *session_rdp,
                                                  GrdRdpRenderer   *renderer,
+                                                 GrdHwAccelVulkan *hwaccel_vulkan,
                                                  GrdHwAccelNvidia *hwaccel_nvidia);
 
-void grd_rdp_layout_manager_notify_session_started (GrdRdpLayoutManager  *layout_manager,
-                                                    GrdRdpCursorRenderer *cursor_renderer,
-                                                    rdpContext           *rdp_context);
+void grd_rdp_layout_manager_notify_session_started (GrdRdpLayoutManager   *layout_manager,
+                                                    GrdRdpCursorRenderer  *cursor_renderer,
+                                                    rdpContext            *rdp_context,
+                                                    GrdRdpScreenShareMode  screen_share_mode);
 
 void grd_rdp_layout_manager_submit_new_monitor_config (GrdRdpLayoutManager *layout_manager,
                                                        GrdRdpMonitorConfig *monitor_config);
@@ -46,5 +48,3 @@ gboolean grd_rdp_layout_manager_transform_position (GrdRdpLayoutManager  *layout
                                                     uint32_t              y,
                                                     GrdStream           **stream,
                                                     GrdEventMotionAbs    *motion_abs);
-
-#endif /* GRD_RDP_LAYOUT_MANAGER_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 SUSE Software Solutions Germany GmbH
+ * Copyright (C) 2025 Red Hat Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -16,16 +16,14 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
  * 02111-1307, USA.
  *
- * Written by:
- *     Joan Torres <joan.torres@suse.com>
  */
 
 #pragma once
 
-#include "grd-credentials.h"
+#include "grd-settings.h"
 
-#define GRD_TYPE_CREDENTIALS_ONE_TIME (grd_credentials_one_time_get_type ())
-G_DECLARE_FINAL_TYPE (GrdCredentialsOneTime, grd_credentials_one_time,
-                      GRD, CREDENTIALS_ONE_TIME, GrdCredentials)
+#define GRD_TYPE_SETTINGS_HEADLESS (grd_settings_headless_get_type ())
+G_DECLARE_FINAL_TYPE (GrdSettingsHeadless, grd_settings_headless,
+                      GRD, SETTINGS_HEADLESS, GrdSettings)
 
-GrdCredentialsOneTime *grd_credentials_one_time_new (void);
+GrdSettingsHeadless *grd_settings_headless_new (void);

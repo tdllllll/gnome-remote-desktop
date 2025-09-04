@@ -17,8 +17,7 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_PIPEWIRE_STREAM_H
-#define GRD_RDP_PIPEWIRE_STREAM_H
+#pragma once
 
 #include <glib-object.h>
 #include <stdint.h>
@@ -33,6 +32,7 @@ G_DECLARE_FINAL_TYPE (GrdRdpPipeWireStream, grd_rdp_pipewire_stream,
 
 GrdRdpPipeWireStream *grd_rdp_pipewire_stream_new (GrdSessionRdp               *session_rdp,
                                                    GrdRdpCursorRenderer        *cursor_renderer,
+                                                   GrdHwAccelVulkan            *hwaccel_vulkan,
                                                    GrdHwAccelNvidia            *hwaccel_nvidia,
                                                    GrdRdpSurface               *rdp_surface,
                                                    const GrdRdpVirtualMonitor  *virtual_monitor,
@@ -41,5 +41,3 @@ GrdRdpPipeWireStream *grd_rdp_pipewire_stream_new (GrdSessionRdp               *
 
 void grd_rdp_pipewire_stream_resize (GrdRdpPipeWireStream *stream,
                                      GrdRdpVirtualMonitor *virtual_monitor);
-
-#endif /* GRD_RDP_PIPEWIRE_STREAM_H */

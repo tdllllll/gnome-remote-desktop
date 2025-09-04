@@ -21,9 +21,9 @@
  *     Jonas Ådahl <jadahl@gmail.com>
  */
 
-#ifndef GRD_SESSION_H
-#define GRD_SESSION_H
+#pragma once
 
+#include <gio/gio.h>
 #include <glib-object.h>
 #include <stdint.h>
 
@@ -128,6 +128,10 @@ void grd_session_notify_pointer_axis_discrete (GrdSession     *session,
                                                GrdPointerAxis  axis,
                                                int             steps);
 
+void grd_session_notify_pointer_motion (GrdSession *session,
+                                        double      dx,
+                                        double      dy);
+
 void grd_session_notify_pointer_motion_absolute (GrdSession              *session,
                                                  GrdStream               *stream,
                                                  const GrdEventMotionAbs *motion_abs);
@@ -178,4 +182,11 @@ void grd_session_start (GrdSession *session);
 
 void grd_session_stop (GrdSession *session);
 
-#endif /* GRD_SESSION_H */
+gboolean grd_session_flush_input_finish (GrdSession    *session,
+                                         GAsyncResult  *result,
+                                         GError       **error);
+
+void grd_session_flush_input_async (GrdSession          *session,
+                                    GCancellable        *cancellable,
+                                    GAsyncReadyCallback  callback,
+                                    gpointer             user_data);

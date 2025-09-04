@@ -21,11 +21,14 @@
 
 #include "grd-rdp-layout-manager.h"
 
+#include "grd-context.h"
+#include "grd-rdp-cursor-renderer.h"
 #include "grd-rdp-pipewire-stream.h"
 #include "grd-rdp-renderer.h"
 #include "grd-rdp-session-metrics.h"
 #include "grd-rdp-surface.h"
 #include "grd-session-rdp.h"
+#include "grd-settings-user.h"
 #include "grd-stream.h"
 
 #define LAYOUT_RECREATION_TIMEOUT_MS 50
@@ -70,8 +73,11 @@ struct _GrdRdpLayoutManager
   GrdSessionRdp *session_rdp;
   GrdRdpRenderer *renderer;
   GrdRdpCursorRenderer *cursor_renderer;
+  GrdHwAccelVulkan *hwaccel_vulkan;
   GrdHwAccelNvidia *hwaccel_nvidia;
   rdpContext *rdp_context;
+
+  GrdRdpScreenShareMode screen_share_mode;
 
   GSource *layout_update_source;
   GSource *preparation_source;
@@ -397,9 +403,8 @@ on_pipewire_stream_video_resized (GrdRdpPipeWireStream *pipewire_stream,
       (virtual_monitor->width != width || virtual_monitor->height != height))
     {
       g_warning ("[RDP] Layout manager: Unexpected video size change of PipeWire "
-                 "stream (Expected: %ux%u, Got: %ux%u). Terminating session",
+                 "stream (Expected: %ux%u, Got: %ux%u). Ignoring resize event...",
                  virtual_monitor->width, virtual_monitor->height, width, height);
-      transition_to_state (layout_manager, UPDATE_STATE_FATAL_ERROR);
       return;
     }
 
@@ -456,6 +461,7 @@ on_stream_ready (GrdStream           *stream,
   surface_context->pipewire_stream =
     grd_rdp_pipewire_stream_new (layout_manager->session_rdp,
                                  layout_manager->cursor_renderer,
+                                 layout_manager->hwaccel_vulkan,
                                  layout_manager->hwaccel_nvidia,
                                  surface_context->rdp_surface,
                                  surface_context->virtual_monitor,
@@ -516,14 +522,42 @@ grd_rdp_layout_manager_on_stream_created (GrdRdpStreamOwner *stream_owner,
                     layout_manager);
 }
 
+static gboolean
+is_extending_physical_desktop (GrdRdpLayoutManager *layout_manager)
+{
+  GrdSession *session = GRD_SESSION (layout_manager->session_rdp);
+  GrdContext *context = grd_session_get_context (session);
+  GrdSettings *settings = grd_context_get_settings (context);
+
+  return GRD_IS_SETTINGS_USER (settings) &&
+         layout_manager->screen_share_mode == GRD_RDP_SCREEN_SHARE_MODE_EXTEND;
+}
+
+static void
+hide_default_cursor (GrdRdpLayoutManager *layout_manager)
+{
+  GrdRdpCursorUpdate *cursor_update;
+
+  cursor_update = g_new0 (GrdRdpCursorUpdate, 1);
+  cursor_update->update_type = GRD_RDP_CURSOR_UPDATE_TYPE_HIDDEN;
+
+  grd_rdp_cursor_renderer_submit_cursor_update (layout_manager->cursor_renderer,
+                                                cursor_update);
+}
+
 void
-grd_rdp_layout_manager_notify_session_started (GrdRdpLayoutManager  *layout_manager,
-                                               GrdRdpCursorRenderer *cursor_renderer,
-                                               rdpContext           *rdp_context)
+grd_rdp_layout_manager_notify_session_started (GrdRdpLayoutManager   *layout_manager,
+                                               GrdRdpCursorRenderer  *cursor_renderer,
+                                               rdpContext            *rdp_context,
+                                               GrdRdpScreenShareMode  screen_share_mode)
 {
   layout_manager->cursor_renderer = cursor_renderer;
   layout_manager->rdp_context = rdp_context;
+  layout_manager->screen_share_mode = screen_share_mode;
   layout_manager->session_started = TRUE;
+
+  if (is_extending_physical_desktop (layout_manager))
+    hide_default_cursor (layout_manager);
 
   g_source_set_ready_time (layout_manager->layout_update_source, 0);
 }
@@ -597,6 +631,7 @@ on_inhibition_done (GrdRdpRenderer      *renderer,
 GrdRdpLayoutManager *
 grd_rdp_layout_manager_new (GrdSessionRdp    *session_rdp,
                             GrdRdpRenderer   *renderer,
+                            GrdHwAccelVulkan *hwaccel_vulkan,
                             GrdHwAccelNvidia *hwaccel_nvidia)
 {
   GrdRdpLayoutManager *layout_manager;
@@ -604,6 +639,7 @@ grd_rdp_layout_manager_new (GrdSessionRdp    *session_rdp,
   layout_manager = g_object_new (GRD_TYPE_RDP_LAYOUT_MANAGER, NULL);
   layout_manager->session_rdp = session_rdp;
   layout_manager->renderer = renderer;
+  layout_manager->hwaccel_vulkan = hwaccel_vulkan;
   layout_manager->hwaccel_nvidia = hwaccel_nvidia;
 
   layout_manager->inhibition_done_id =
@@ -824,9 +860,14 @@ create_stream (SurfaceContext *surface_context,
 
   if (surface_context->virtual_monitor)
     {
-      grd_session_record_virtual (session, stream_id,
-                                  GRD_SCREEN_CAST_CURSOR_MODE_METADATA,
-                                  TRUE);
+      GrdScreenCastCursorMode cursor_mode;
+
+      if (is_extending_physical_desktop (layout_manager))
+        cursor_mode = GRD_SCREEN_CAST_CURSOR_MODE_EMBEDDED;
+      else
+        cursor_mode = GRD_SCREEN_CAST_CURSOR_MODE_METADATA;
+
+      grd_session_record_virtual (session, stream_id, cursor_mode, TRUE);
     }
   else
     {
