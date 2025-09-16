@@ -1,3 +1,9 @@
+gnome-remote-desktop (49.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 08:45:14 -0400
+
 gnome-remote-desktop (48.2-1) unstable; urgency=medium
 
   [ Jeremy Bícha ]
