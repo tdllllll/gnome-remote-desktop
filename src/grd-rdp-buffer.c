@@ -73,27 +73,6 @@ grd_rdp_buffer_mark_for_removal (GrdRdpBuffer *rdp_buffer)
 }
 
 static gboolean
-get_vk_format_from_drm_format (uint32_t   drm_format,
-                               VkFormat  *vk_format,
-                               GError   **error)
-{
-  *vk_format = VK_FORMAT_UNDEFINED;
-
-  switch (drm_format)
-    {
-    case DRM_FORMAT_ARGB8888:
-    case DRM_FORMAT_XRGB8888:
-      *vk_format = VK_FORMAT_B8G8R8A8_UNORM;
-      return TRUE;
-    }
-
-  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-               "No VkFormat available for DRM format 0x%08X", drm_format);
-
-  return FALSE;
-}
-
-static gboolean
 import_dma_buf_image (GrdRdpBuffer      *rdp_buffer,
                       GrdRdpPwBuffer    *rdp_pw_buffer,
                       GrdRdpBufferInfo  *rdp_buffer_info,
@@ -107,8 +86,8 @@ import_dma_buf_image (GrdRdpBuffer      *rdp_buffer,
     grd_rdp_pw_buffer_get_dma_buf_info (rdp_pw_buffer);
   VkFormat vk_format = VK_FORMAT_UNDEFINED;
 
-  if (!get_vk_format_from_drm_format (rdp_buffer_info->drm_format, &vk_format,
-                                      error))
+  if (!grd_vk_get_vk_format_from_drm_format (rdp_buffer_info->drm_format,
+                                             &vk_format, error))
     return FALSE;
 
   rdp_buffer->dma_buf_image =
@@ -122,6 +101,8 @@ import_dma_buf_image (GrdRdpBuffer      *rdp_buffer,
                               error);
   if (!rdp_buffer->dma_buf_image)
     return FALSE;
+
+  rdp_buffer_info->has_vk_image = TRUE;
 
   return TRUE;
 }
@@ -138,18 +119,30 @@ grd_rdp_buffer_new (GrdRdpPwBuffer    *rdp_pw_buffer,
 
   rdp_buffer = g_object_new (GRD_TYPE_RDP_BUFFER, NULL);
   rdp_buffer->rdp_pw_buffer = rdp_pw_buffer;
-  rdp_buffer->rdp_buffer_info =
-    g_memdup2 (rdp_buffer_info, sizeof (GrdRdpBufferInfo));
 
   buffer_type = grd_rdp_pw_buffer_get_buffer_type (rdp_pw_buffer);
   if (buffer_type == GRD_RDP_BUFFER_TYPE_DMA_BUF &&
       vk_device &&
       rdp_buffer_info->drm_format_modifier != DRM_FORMAT_MOD_INVALID)
     {
+      g_autoptr (GError) local_error = NULL;
+
       if (!import_dma_buf_image (rdp_buffer, rdp_pw_buffer, rdp_buffer_info,
-                                 rdp_surface, vk_device, error))
-        return NULL;
+                                 rdp_surface, vk_device, &local_error))
+        {
+          if (rdp_buffer_info->has_vk_image)
+            {
+              g_propagate_error (error, g_steal_pointer (&local_error));
+              return NULL;
+            }
+
+          g_debug ("[RDP] Could not import dma-buf image: %s",
+                   local_error->message);
+        }
     }
+
+  rdp_buffer->rdp_buffer_info =
+    g_memdup2 (rdp_buffer_info, sizeof (GrdRdpBufferInfo));
 
   return g_steal_pointer (&rdp_buffer);
 }

@@ -505,6 +505,8 @@ rdp_input_synchronize_event (rdpInput *rdp_input,
   GrdSessionRdp *session_rdp = rdp_peer_context->session_rdp;
   GrdRdpEventQueue *rdp_event_queue = session_rdp->rdp_event_queue;
 
+  g_debug ("[RDP] Received Synchronize event with flags 0x%08X", flags);
+
   if (!is_rdp_peer_flag_set (session_rdp, RDP_PEER_ACTIVATED) ||
       session_rdp->is_view_only)
     return TRUE;
@@ -1485,6 +1487,7 @@ grd_session_rdp_new (GrdRdpServer      *rdp_server,
   session_rdp->layout_manager =
     grd_rdp_layout_manager_new (session_rdp,
                                 session_rdp->renderer,
+                                hwaccel_vulkan,
                                 hwaccel_nvidia);
 
   if (!init_rdp_session (session_rdp, username, password, &error))
