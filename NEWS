@@ -1,14 +1,53 @@
-48.2
+49.0
 ====
 
-* Handle Vulkan dma-buf format compatibility issues [Jonas, Pascal; !323, !324,
-  !339]
+* Handle Vulkan dma-buf format compatibility issues [Pascal; !339]
+* Fix crash [Jonas; !341]
 
 Contributors:
   Jonas Ådahl, Pascal Nowack
 
 Translators:
-  Antonio Marin [ro], Nathan Follens [nl]
+  Makoto Sakaguchi [ja], luming zh [zh_CN], Ekaterine Papava [ka],
+  Anders Jonsson [sv], Artur S0 [ru], Daniel Mustieles [es],
+  Jordi Mas i Hernandez [ca], Asier Saratsua Garmendia [eu], Seong-ho Cho [ko],
+  Yuri Chornoivan [uk], Aurimas Aurimas Černius [lt],
+  Juliano de Souza Camargo [pt_BR], Francisco Diéguez Souto [gl],
+  Ask Hjorth Larsen [da], Nathan Follens [nl], Kristjan SCHMIDT [eo],
+  Emin Tufan Çetin [tr]
+
+49.rc
+=====
+
+* Allow systemd service management of all units via grdctl [Joan; !320]
+* Misc bug fixes & cleanups [Jonas, Pascal; !329, !331, !324, !333, !326, !336]
+* Add support for relative pointer movements via RDP [Pascal; !332]
+* Add support for extending desktop with virtual monitor via RDP [Pascal; !334]
+
+Contributors:
+  Jonas Ådahl, Joan Torres López, Pascal Nowack
+
+Translators:
+  Fabio Tomat [fur], Dušan Kazik [sk], Antonio Marin [ro], Martin [sl],
+  Daniel Rusek [cs], Danial Behzadi [fa], Nathan Follens [nl], Balázs Úr [hu],
+  Piotr Drąg [pl], Yaron Shahrabani [he]
+
+49.alpha
+========
+* Add touch support [Pascal; !314]
+* Fix failure to connect on some NVIDIA systems [Jonas; !323]
+* Plumb locked keyboard modifiers via libei [Jonas; !311]
+* Documentation improvements [W.; !317]
+* Fix crash [Pascal; !325]
+* Plug leak [Michael; !319]
+* Misc cleanups & improvements [Pascal, Jonas; !315, !313, !327]
+
+Contributors:
+  Jonas Ådahl, Michael Catanzaro, Pascal Nowack, W. Michael Petullo
+
+Translators:
+  Takayuki KUSANO [ja], Emilio Sepúlveda [ia], Antonio Marin [ro],
+  Aefgh Threenine [th]
 
 48.1
 ====

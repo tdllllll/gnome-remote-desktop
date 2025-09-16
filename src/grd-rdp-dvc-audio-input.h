@@ -17,23 +17,15 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_AUDIO_INPUT_H
-#define GRD_RDP_AUDIO_INPUT_H
+#pragma once
 
-#include <freerdp/server/audin.h>
-#include <glib-object.h>
+#include "grd-rdp-dvc.h"
 
-#include "grd-types.h"
+#define GRD_TYPE_RDP_DVC_AUDIO_INPUT (grd_rdp_dvc_audio_input_get_type ())
+G_DECLARE_FINAL_TYPE (GrdRdpDvcAudioInput, grd_rdp_dvc_audio_input,
+                      GRD, RDP_DVC_AUDIO_INPUT, GrdRdpDvc)
 
-#define GRD_TYPE_RDP_AUDIO_INPUT (grd_rdp_audio_input_get_type ())
-G_DECLARE_FINAL_TYPE (GrdRdpAudioInput, grd_rdp_audio_input,
-                      GRD, RDP_AUDIO_INPUT, GObject)
-
-GrdRdpAudioInput *grd_rdp_audio_input_new (GrdSessionRdp *session_rdp,
-                                           GrdRdpDvc     *rdp_dvc,
-                                           HANDLE         vcm,
-                                           rdpContext    *rdp_context);
-
-void grd_rdp_audio_input_maybe_init (GrdRdpAudioInput *audio_input);
-
-#endif /* GRD_RDP_AUDIO_INPUT_H */
+GrdRdpDvcAudioInput *grd_rdp_dvc_audio_input_new (GrdSessionRdp    *session_rdp,
+                                                  GrdRdpDvcHandler *dvc_handler,
+                                                  HANDLE            vcm,
+                                                  rdpContext       *rdp_context);

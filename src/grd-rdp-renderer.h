@@ -17,8 +17,7 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_RENDERER_H
-#define GRD_RDP_RENDERER_H
+#pragma once
 
 #include <freerdp/freerdp.h>
 #include <glib-object.h>
@@ -46,10 +45,10 @@ void grd_rdp_renderer_update_output_suppression_state (GrdRdpRenderer *renderer,
 
 void grd_rdp_renderer_invoke_shutdown (GrdRdpRenderer *renderer);
 
-gboolean grd_rdp_renderer_start (GrdRdpRenderer         *renderer,
-                                 GrdHwAccelVulkan       *hwaccel_vulkan,
-                                 GrdRdpGraphicsPipeline *graphics_pipeline,
-                                 rdpContext             *rdp_context);
+gboolean grd_rdp_renderer_start (GrdRdpRenderer            *renderer,
+                                 GrdHwAccelVulkan          *hwaccel_vulkan,
+                                 GrdRdpDvcGraphicsPipeline *graphics_pipeline,
+                                 rdpContext                *rdp_context);
 
 void grd_rdp_renderer_notify_new_desktop_layout (GrdRdpRenderer *renderer,
                                                  uint32_t        desktop_width,
@@ -86,5 +85,3 @@ gboolean grd_rdp_renderer_render_frame (GrdRdpRenderer      *renderer,
                                         GrdRdpSurface       *rdp_surface,
                                         GrdRdpRenderContext *render_context,
                                         GrdRdpLegacyBuffer  *buffer);
-
-#endif /* GRD_RDP_RENDERER_H */

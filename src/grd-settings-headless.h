@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Pascal Nowack
+ * Copyright (C) 2025 Red Hat Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -15,25 +15,15 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
  * 02111-1307, USA.
+ *
  */
 
-#ifndef GRD_RDP_TELEMETRY_H
-#define GRD_RDP_TELEMETRY_H
+#pragma once
 
-#include <freerdp/server/telemetry.h>
-#include <glib-object.h>
+#include "grd-settings.h"
 
-#include "grd-types.h"
+#define GRD_TYPE_SETTINGS_HEADLESS (grd_settings_headless_get_type ())
+G_DECLARE_FINAL_TYPE (GrdSettingsHeadless, grd_settings_headless,
+                      GRD, SETTINGS_HEADLESS, GrdSettings)
 
-#define GRD_TYPE_RDP_TELEMETRY (grd_rdp_telemetry_get_type ())
-G_DECLARE_FINAL_TYPE (GrdRdpTelemetry, grd_rdp_telemetry,
-                      GRD, RDP_TELEMETRY, GObject)
-
-GrdRdpTelemetry *grd_rdp_telemetry_new (GrdSessionRdp *session_rdp,
-                                        GrdRdpDvc     *rdp_dvc,
-                                        HANDLE         vcm,
-                                        rdpContext    *rdp_context);
-
-void grd_rdp_telemetry_maybe_init (GrdRdpTelemetry *telemetry);
-
-#endif /* GRD_RDP_TELEMETRY_H */
+GrdSettingsHeadless *grd_settings_headless_new (void);

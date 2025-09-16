@@ -50,6 +50,8 @@ enum
 enum
 {
   STOPPED,
+  TOUCH_DEVICE_ADDED,
+  TOUCH_DEVICE_REMOVED,
 
   N_SIGNALS
 };
@@ -85,6 +87,17 @@ typedef struct _GrdRegion
   struct ei_region *ei_region;
 } GrdRegion;
 
+struct _GrdTouchContact
+{
+  struct ei_touch *ei_touch_contact;
+};
+
+typedef struct _GrdEiPing
+{
+  GTask *task;
+  struct ei_ping *ping;
+} GrdEiPing;
+
 typedef struct _GrdSessionPrivate
 {
   GrdContext *context;
@@ -92,15 +105,21 @@ typedef struct _GrdSessionPrivate
   GrdDBusMutterRemoteDesktopSession *remote_desktop_session;
   GrdDBusMutterScreenCastSession *screen_cast_session;
 
+  gboolean is_ready;
+
   GrdClipboard *clipboard;
 
   struct ei *ei;
   struct ei_seat *ei_seat;
+  struct ei_device *ei_pointer;
   struct ei_device *ei_abs_pointer;
   struct ei_device *ei_keyboard;
+  struct ei_device *ei_touch;
   uint32_t ei_sequence;
   GSource *ei_source;
-  GHashTable *regions;
+
+  GHashTable *abs_pointer_regions;
+  GHashTable *touch_regions;
 
   struct xkb_context *xkb_context;
   struct xkb_keymap *xkb_keymap;
@@ -110,11 +129,19 @@ typedef struct _GrdSessionPrivate
 
   gboolean started;
 
+  gboolean locked_modifier_valid;
+  gboolean caps_lock_state;
+  gboolean num_lock_state;
   gulong caps_lock_state_changed_id;
   gulong num_lock_state_changed_id;
+
+  GHashTable *pings;
 } GrdSessionPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (GrdSession, grd_session, G_TYPE_OBJECT)
+
+static void
+finish_and_free_ping (GrdEiPing *ping);
 
 GrdContext *
 grd_session_get_context (GrdSession *session)
@@ -133,10 +160,13 @@ clear_ei (GrdSession *session)
   g_clear_pointer (&priv->xkb_keymap, xkb_keymap_unref);
   g_clear_pointer (&priv->xkb_context, xkb_context_unref);
 
-  g_clear_pointer (&priv->regions, g_hash_table_unref);
+  g_clear_pointer (&priv->touch_regions, g_hash_table_unref);
+  g_clear_pointer (&priv->abs_pointer_regions, g_hash_table_unref);
 
+  g_clear_pointer (&priv->ei_touch, ei_device_unref);
   g_clear_pointer (&priv->ei_keyboard, ei_device_unref);
   g_clear_pointer (&priv->ei_abs_pointer, ei_device_unref);
+  g_clear_pointer (&priv->ei_pointer, ei_device_unref);
   g_clear_pointer (&priv->ei_seat, ei_seat_unref);
   g_clear_pointer (&priv->ei_source, g_source_destroy);
   g_clear_pointer (&priv->ei, ei_unref);
@@ -189,6 +219,34 @@ grd_session_stop (GrdSession *session)
   clear_session (session);
 
   g_signal_emit (session, signals[STOPPED], 0);
+}
+
+gboolean
+grd_session_flush_input_finish (GrdSession    *session,
+                                GAsyncResult  *result,
+                                GError       **error)
+{
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+void
+grd_session_flush_input_async (GrdSession          *session,
+                               GCancellable        *cancellable,
+                               GAsyncReadyCallback  callback,
+                               gpointer             user_data)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+  GrdEiPing *ping;
+
+  ping = g_new0 (GrdEiPing, 1);
+  ping->task = g_task_new (session,
+                           cancellable,
+                           callback,
+                           user_data);
+  ping->ping = ei_new_ping (priv->ei);
+  ei_ping (ping->ping);
+
+  g_hash_table_insert (priv->pings, ping->ping, ping);
 }
 
 static void
@@ -625,35 +683,162 @@ grd_session_notify_pointer_axis_discrete (GrdSession    *session,
 }
 
 void
-grd_session_notify_pointer_motion_absolute (GrdSession                     *session,
-                                            GrdStream                      *stream,
-                                            const GrdEventPointerMotionAbs *motion_abs)
+grd_session_notify_pointer_motion (GrdSession *session,
+                                   double      dx,
+                                   double      dy)
 {
   GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+
+  if (!priv->ei_pointer)
+    return;
+
+  ei_device_pointer_motion (priv->ei_pointer, dx, dy);
+  ei_device_frame (priv->ei_pointer, g_get_monotonic_time ());
+}
+
+static gboolean
+transform_position (GrdSession               *session,
+                    GHashTable               *regions,
+                    GrdStream                *stream,
+                    const GrdEventMotionAbs  *motion_abs,
+                    struct ei_device        **ei_device,
+                    double                   *x,
+                    double                   *y)
+{
   GrdRegion *region;
   double scale_x;
   double scale_y;
-  double x;
-  double y;
+  double scaled_x;
+  double scaled_y;
 
   g_assert (motion_abs->input_rect_width > 0);
   g_assert (motion_abs->input_rect_height > 0);
 
-  region = g_hash_table_lookup (priv->regions, grd_stream_get_mapping_id (stream));
+  region = g_hash_table_lookup (regions, grd_stream_get_mapping_id (stream));
   if (!region)
-    return;
+    return FALSE;
 
   scale_x = ((double) motion_abs->input_rect_width) /
             ei_region_get_width (region->ei_region);
   scale_y = ((double) motion_abs->input_rect_height) /
             ei_region_get_height (region->ei_region);
-  x = motion_abs->x / scale_x;
-  y = motion_abs->y / scale_y;
+  scaled_x = motion_abs->x / scale_x;
+  scaled_y = motion_abs->y / scale_y;
 
-  ei_device_pointer_motion_absolute (region->ei_device,
-                                     ei_region_get_x (region->ei_region) + x,
-                                     ei_region_get_y (region->ei_region) + y);
-  ei_device_frame (region->ei_device, g_get_monotonic_time ());
+  *ei_device = region->ei_device;
+  *x = ei_region_get_x (region->ei_region) + scaled_x;
+  *y = ei_region_get_y (region->ei_region) + scaled_y;
+
+  return TRUE;
+}
+
+void
+grd_session_notify_pointer_motion_absolute (GrdSession              *session,
+                                            GrdStream               *stream,
+                                            const GrdEventMotionAbs *motion_abs)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+  struct ei_device *ei_device = NULL;
+  double x = 0;
+  double y = 0;
+
+  if (!transform_position (session, priv->abs_pointer_regions,
+                           stream, motion_abs, &ei_device, &x, &y))
+    return;
+
+  ei_device_pointer_motion_absolute (ei_device, x, y);
+  ei_device_frame (ei_device, g_get_monotonic_time ());
+}
+
+gboolean
+grd_session_has_touch_device (GrdSession *session)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+
+  return !!priv->ei_touch;
+}
+
+GrdTouchContact *
+grd_session_acquire_touch_contact (GrdSession *session)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+  GrdTouchContact *touch_contact;
+
+  g_assert (priv->ei_touch);
+
+  touch_contact = g_new0 (GrdTouchContact, 1);
+  touch_contact->ei_touch_contact = ei_device_touch_new (priv->ei_touch);
+
+  return touch_contact;
+}
+
+void
+grd_session_release_touch_contact (GrdSession      *session,
+                                   GrdTouchContact *touch_contact)
+{
+  g_clear_pointer (&touch_contact->ei_touch_contact, ei_touch_unref);
+
+  g_free (touch_contact);
+}
+
+void
+grd_session_notify_touch_down (GrdSession              *session,
+                               const GrdTouchContact   *touch_contact,
+                               GrdStream               *stream,
+                               const GrdEventMotionAbs *motion_abs)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+  struct ei_device *ei_device = NULL;
+  double x = 0;
+  double y = 0;
+
+  if (!transform_position (session, priv->touch_regions, stream, motion_abs,
+                           &ei_device, &x, &y))
+    return;
+
+  ei_touch_down (touch_contact->ei_touch_contact, x, y);
+}
+
+void
+grd_session_notify_touch_motion (GrdSession              *session,
+                                 const GrdTouchContact   *touch_contact,
+                                 GrdStream               *stream,
+                                 const GrdEventMotionAbs *motion_abs)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+  struct ei_device *ei_device = NULL;
+  double x = 0;
+  double y = 0;
+
+  if (!transform_position (session, priv->touch_regions, stream, motion_abs,
+                           &ei_device, &x, &y))
+    return;
+
+  ei_touch_motion (touch_contact->ei_touch_contact, x, y);
+}
+
+void
+grd_session_notify_touch_up (GrdSession      *session,
+                             GrdTouchContact *touch_contact)
+{
+  ei_touch_up (touch_contact->ei_touch_contact);
+}
+
+void
+grd_session_notify_touch_cancel (GrdSession      *session,
+                                 GrdTouchContact *touch_contact)
+{
+  ei_touch_cancel (touch_contact->ei_touch_contact);
+}
+
+void
+grd_session_notify_touch_device_frame (GrdSession *session)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+
+  g_assert (priv->ei_touch);
+
+  ei_device_frame (priv->ei_touch, g_get_monotonic_time ());
 }
 
 static GVariant *
@@ -1042,36 +1227,6 @@ on_remote_desktop_session_selection_transfer (GrdDBusMutterRemoteDesktopSession 
                                                       mime_type, serial);
 }
 
-static void
-on_caps_lock_state_changed (GrdDBusMutterRemoteDesktopSession *session_proxy,
-                            GParamSpec                        *param_spec,
-                            GrdSession                        *session)
-{
-  GrdSessionClass *klass = GRD_SESSION_GET_CLASS (session);
-  gboolean state;
-
-  state = grd_dbus_mutter_remote_desktop_session_get_caps_lock_state (session_proxy);
-  g_debug ("Caps lock state: %s", state ? "locked" : "unlocked");
-
-  if (klass->on_caps_lock_state_changed)
-    klass->on_caps_lock_state_changed (session, state);
-}
-
-static void
-on_num_lock_state_changed (GrdDBusMutterRemoteDesktopSession *session_proxy,
-                           GParamSpec                        *param_spec,
-                           GrdSession                        *session)
-{
-  GrdSessionClass *klass = GRD_SESSION_GET_CLASS (session);
-  gboolean state;
-
-  state = grd_dbus_mutter_remote_desktop_session_get_num_lock_state (session_proxy);
-  g_debug ("Num lock state: %s", state ? "locked" : "unlocked");
-
-  if (klass->on_num_lock_state_changed)
-    klass->on_num_lock_state_changed (session, state);
-}
-
 static gboolean
 grd_ei_source_prepare (gpointer user_data)
 {
@@ -1198,36 +1353,30 @@ grd_region_free (GrdRegion *region)
   g_free (region);
 }
 
-static gboolean
-should_dispose_region (gpointer key,
-                       gpointer value,
-                       gpointer user_data)
-{
-  struct ei_device *ei_device = user_data;
-  GrdRegion *region = value;
-
-  return region->ei_device == ei_device;
-}
-
 static void
 maybe_dispose_ei_abs_pointer (GrdSession *session)
 {
   GrdSessionPrivate *priv = grd_session_get_instance_private (session);
 
-  if (!priv->ei_abs_pointer)
-    return;
-
-  g_hash_table_foreach_remove (priv->regions,
-                               should_dispose_region,
-                               priv->ei_abs_pointer);
+  g_hash_table_remove_all (priv->abs_pointer_regions);
   g_clear_pointer (&priv->ei_abs_pointer, ei_device_unref);
 }
 
 static void
-process_regions (GrdSession       *session,
-                 struct ei_device *ei_device)
+maybe_dispose_ei_touch (GrdSession *session)
 {
   GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+
+  g_signal_emit (session, signals[TOUCH_DEVICE_REMOVED], 0);
+  g_hash_table_remove_all (priv->touch_regions);
+  g_clear_pointer (&priv->ei_touch, ei_device_unref);
+}
+
+static void
+process_regions (GrdSession       *session,
+                 struct ei_device *ei_device,
+                 GHashTable       *regions)
+{
   size_t i = 0;
   struct ei_region *ei_region;
 
@@ -1251,7 +1400,7 @@ process_regions (GrdSession       *session,
       region = g_new0 (GrdRegion, 1);
       region->ei_device = ei_device_ref (ei_device);
       region->ei_region = ei_region_ref (ei_region);
-      g_hash_table_insert (priv->regions, g_strdup (mapping_id), region);
+      g_hash_table_insert (regions, g_strdup (mapping_id), region);
     }
 }
 
@@ -1285,6 +1434,7 @@ grd_ei_source_dispatch (gpointer user_data)
                                      EI_DEVICE_CAP_POINTER_ABSOLUTE,
                                      EI_DEVICE_CAP_BUTTON,
                                      EI_DEVICE_CAP_SCROLL,
+                                     EI_DEVICE_CAP_TOUCH,
                                      NULL);
           break;
         case EI_EVENT_SEAT_REMOVED:
@@ -1310,28 +1460,117 @@ grd_ei_source_dispatch (gpointer user_data)
                     return G_SOURCE_REMOVE;
                   }
               }
+            if (ei_device_has_capability (device, EI_DEVICE_CAP_POINTER))
+              {
+                g_clear_pointer (&priv->ei_pointer, ei_device_unref);
+                priv->ei_pointer = ei_device_ref (device);
+              }
             if (ei_device_has_capability (device, EI_DEVICE_CAP_POINTER_ABSOLUTE))
               {
                 maybe_dispose_ei_abs_pointer (session);
                 priv->ei_abs_pointer = ei_device_ref (device);
-                process_regions (session, device);
+                process_regions (session, device, priv->abs_pointer_regions);
+              }
+            if (ei_device_has_capability (device, EI_DEVICE_CAP_TOUCH))
+              {
+                maybe_dispose_ei_touch (session);
+                priv->ei_touch = ei_device_ref (device);
+                process_regions (session, device, priv->touch_regions);
               }
             break;
           }
         case EI_EVENT_DEVICE_RESUMED:
+          if (ei_event_get_device (event) == priv->ei_pointer)
+            ei_device_start_emulating (priv->ei_pointer, ++priv->ei_sequence);
           if (ei_event_get_device (event) == priv->ei_abs_pointer)
             ei_device_start_emulating (priv->ei_abs_pointer, ++priv->ei_sequence);
           if (ei_event_get_device (event) == priv->ei_keyboard)
             ei_device_start_emulating (priv->ei_keyboard, ++priv->ei_sequence);
+          if (ei_event_get_device (event) == priv->ei_touch)
+            {
+              ei_device_start_emulating (priv->ei_touch, ++priv->ei_sequence);
+              g_signal_emit (session, signals[TOUCH_DEVICE_ADDED], 0);
+            }
           break;
         case EI_EVENT_DEVICE_PAUSED:
           break;
         case EI_EVENT_DEVICE_REMOVED:
+          if (ei_event_get_device (event) == priv->ei_pointer)
+            g_clear_pointer (&priv->ei_pointer, ei_device_unref);
           if (ei_event_get_device (event) == priv->ei_abs_pointer)
             maybe_dispose_ei_abs_pointer (session);
           if (ei_event_get_device (event) == priv->ei_keyboard)
             g_clear_pointer (&priv->ei_keyboard, ei_device_unref);
+          if (ei_event_get_device (event) == priv->ei_touch)
+            maybe_dispose_ei_touch (session);
           break;
+        case EI_EVENT_KEYBOARD_MODIFIERS:
+          if (priv->xkb_keymap)
+            {
+              GrdSessionClass *klass = GRD_SESSION_GET_CLASS (session);
+              uint32_t latched_mods =
+                ei_event_keyboard_get_xkb_mods_latched (event);
+              uint32_t locked_mods =
+                ei_event_keyboard_get_xkb_mods_locked (event);
+              gboolean caps_lock_state;
+              gboolean num_lock_state;
+
+              caps_lock_state =
+                !!((latched_mods | locked_mods) &
+                   (1 << xkb_keymap_mod_get_index (priv->xkb_keymap,
+                                                   XKB_MOD_NAME_CAPS)));
+              num_lock_state =
+                !!((latched_mods | locked_mods) &
+                   (1 << xkb_keymap_mod_get_index (priv->xkb_keymap,
+                                                   XKB_MOD_NAME_NUM)));
+
+              if (!priv->locked_modifier_valid ||
+                  caps_lock_state != priv->caps_lock_state)
+                {
+                  g_debug ("Caps lock state: %s",
+                           caps_lock_state ? "locked" : "unlocked");
+                  priv->caps_lock_state = caps_lock_state;
+
+                  if (klass->on_caps_lock_state_changed)
+                    {
+                      klass->on_caps_lock_state_changed (session,
+                                                         caps_lock_state);
+                    }
+                }
+
+              if (!priv->locked_modifier_valid ||
+                  num_lock_state != priv->num_lock_state)
+                {
+                  g_debug ("Num lock state: %s",
+                           num_lock_state ? "locked" : "unlocked");
+                  priv->num_lock_state = num_lock_state;
+
+                  if (klass->on_num_lock_state_changed)
+                    {
+                      klass->on_num_lock_state_changed (session,
+                                                        num_lock_state);
+                    }
+                }
+
+              priv->locked_modifier_valid = TRUE;
+            }
+          else
+            {
+              g_warning ("Couldn't update caps lock / num lock state, "
+                         "no keymap");
+            }
+          break;
+        case EI_EVENT_PONG:
+          {
+            GrdEiPing *ping = NULL;
+
+            if (g_hash_table_steal_extended (priv->pings,
+                                             ei_event_pong_get_ping (event),
+                                             NULL,
+                                             (gpointer *) &ping))
+              finish_and_free_ping (ping);
+            break;
+          }
         default:
           handled = FALSE;
           break;
@@ -1340,6 +1579,11 @@ grd_ei_source_dispatch (gpointer user_data)
       if (handled)
         {
           g_debug ("ei: Handled event type %s",
+                   ei_event_type_to_string (ei_event_type));
+        }
+      else
+        {
+          g_debug ("ei: Didn't handle event type %s",
                    ei_event_type_to_string (ei_event_type));
         }
       ei_event_unref (event);
@@ -1449,20 +1693,10 @@ on_eis_connected (GObject      *object,
                                                    on_screen_cast_session_created,
                                                    session);
 
-  priv->caps_lock_state_changed_id =
-    g_signal_connect (priv->remote_desktop_session, "notify::caps-lock-state",
-                      G_CALLBACK (on_caps_lock_state_changed),
-                      session);
-  priv->num_lock_state_changed_id =
-    g_signal_connect (priv->remote_desktop_session, "notify::num-lock-state",
-                      G_CALLBACK (on_num_lock_state_changed),
-                      session);
+  priv->is_ready = TRUE;
 
   if (klass->remote_desktop_session_ready)
     klass->remote_desktop_session_ready (session);
-
-  on_caps_lock_state_changed (priv->remote_desktop_session, NULL, session);
-  on_num_lock_state_changed (priv->remote_desktop_session, NULL, session);
 }
 
 static void
@@ -1562,6 +1796,14 @@ grd_session_start (GrdSession *session)
                                                       session);
 }
 
+gboolean
+grd_session_is_ready (GrdSession *session)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+
+  return priv->is_ready;
+}
+
 static void
 grd_session_finalize (GObject *object)
 {
@@ -1572,14 +1814,17 @@ grd_session_finalize (GObject *object)
     g_assert (g_cancellable_is_cancelled (priv->cancellable));
   g_clear_object (&priv->cancellable);
 
-  g_clear_pointer (&priv->regions, g_hash_table_unref);
+  g_clear_pointer (&priv->touch_regions, g_hash_table_unref);
+  g_clear_pointer (&priv->abs_pointer_regions, g_hash_table_unref);
 
   g_assert (!priv->xkb_state);
   g_assert (!priv->xkb_keymap);
   g_assert (!priv->xkb_context);
 
+  g_assert (!priv->ei_touch);
   g_assert (!priv->ei_keyboard);
   g_assert (!priv->ei_abs_pointer);
+  g_assert (!priv->ei_pointer);
   g_assert (!priv->ei_seat);
   g_assert (!priv->ei_source);
   g_assert (!priv->ei);
@@ -1631,13 +1876,49 @@ grd_session_get_property (GObject    *object,
 }
 
 static void
+grd_ei_ping_free (GrdEiPing *ping)
+{
+  g_object_unref (ping->task);
+  g_clear_pointer (&ping->ping, ei_ping_unref);
+  g_free (ping);
+}
+
+static void
+cancel_and_free_ping (gpointer user_data)
+{
+  GrdEiPing *ping = user_data;
+  GCancellable *cancellable;
+
+  cancellable = g_task_get_cancellable (ping->task);
+  if (!g_cancellable_is_cancelled (cancellable))
+    g_cancellable_cancel (cancellable);
+  grd_ei_ping_free (ping);
+}
+
+static void
+finish_and_free_ping (GrdEiPing *ping)
+{
+  if (!g_task_return_error_if_cancelled (ping->task))
+    g_task_return_boolean (ping->task, TRUE);
+  grd_ei_ping_free (ping);
+}
+
+static void
 grd_session_init (GrdSession *session)
 {
   GrdSessionPrivate *priv = grd_session_get_instance_private (session);
 
-  priv->regions = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                         g_free,
-                                         (GDestroyNotify) grd_region_free);
+  priv->abs_pointer_regions =
+    g_hash_table_new_full (g_str_hash, g_str_equal,
+                           g_free,
+                           (GDestroyNotify) grd_region_free);
+  priv->touch_regions =
+    g_hash_table_new_full (g_str_hash, g_str_equal,
+                           g_free,
+                           (GDestroyNotify) grd_region_free);
+
+  priv->pings = g_hash_table_new_full (NULL, NULL,
+                                       NULL, cancel_and_free_ping);
 }
 
 static void
@@ -1665,4 +1946,16 @@ grd_session_class_init (GrdSessionClass *klass)
                                    0,
                                    NULL, NULL, NULL,
                                    G_TYPE_NONE, 0);
+  signals[TOUCH_DEVICE_ADDED] = g_signal_new ("touch-device-added",
+                                              G_TYPE_FROM_CLASS (klass),
+                                              G_SIGNAL_RUN_LAST,
+                                              0,
+                                              NULL, NULL, NULL,
+                                              G_TYPE_NONE, 0);
+  signals[TOUCH_DEVICE_REMOVED] = g_signal_new ("touch-device-removed",
+                                                G_TYPE_FROM_CLASS (klass),
+                                                G_SIGNAL_RUN_LAST,
+                                                0,
+                                                NULL, NULL, NULL,
+                                                G_TYPE_NONE, 0);
 }

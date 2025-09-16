@@ -17,8 +17,7 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_SESSION_RDP_H
-#define GRD_SESSION_RDP_H
+#pragma once
 
 #include <gio/gio.h>
 #include <glib-object.h>
@@ -48,6 +47,8 @@ typedef enum _GrdRdpChannel
   GRD_RDP_CHANNEL_AUDIO_INPUT,
   GRD_RDP_CHANNEL_AUDIO_PLAYBACK,
   GRD_RDP_CHANNEL_DISPLAY_CONTROL,
+  GRD_RDP_CHANNEL_GRAPHICS_PIPELINE,
+  GRD_RDP_CHANNEL_INPUT,
   GRD_RDP_CHANNEL_TELEMETRY,
 } GrdRdpChannel;
 
@@ -77,5 +78,3 @@ gboolean grd_session_rdp_send_server_redirection (GrdSessionRdp *session_rdp,
                                                   const char    *username,
                                                   const char    *password,
                                                   const char    *certificate);
-
-#endif /* GRD_SESSION_RDP_H */

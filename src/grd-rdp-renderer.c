@@ -26,9 +26,8 @@
 #include "grd-hwaccel-nvidia.h"
 #include "grd-hwaccel-vaapi.h"
 #include "grd-hwaccel-vulkan.h"
+#include "grd-rdp-dvc-graphics-pipeline.h"
 #include "grd-rdp-frame.h"
-#include "grd-rdp-graphics-pipeline.h"
-#include "grd-rdp-private.h"
 #include "grd-rdp-render-context.h"
 #include "grd-rdp-surface.h"
 #include "grd-rdp-surface-renderer.h"
@@ -59,7 +58,7 @@ struct _GrdRdpRenderer
   GrdHwAccelVaapi *hwaccel_vaapi;
   GrdRdpSwEncoderCa *encoder_ca;
 
-  GrdRdpGraphicsPipeline *graphics_pipeline;
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline;
   rdpContext *rdp_context;
 
   GThread *graphics_thread;
@@ -196,10 +195,10 @@ maybe_initialize_hardware_acceleration (GrdRdpRenderer   *renderer,
 }
 
 gboolean
-grd_rdp_renderer_start (GrdRdpRenderer         *renderer,
-                        GrdHwAccelVulkan       *hwaccel_vulkan,
-                        GrdRdpGraphicsPipeline *graphics_pipeline,
-                        rdpContext             *rdp_context)
+grd_rdp_renderer_start (GrdRdpRenderer            *renderer,
+                        GrdHwAccelVulkan          *hwaccel_vulkan,
+                        GrdRdpDvcGraphicsPipeline *graphics_pipeline,
+                        rdpContext                *rdp_context)
 {
   g_autoptr (GError) error = NULL;
 
@@ -245,6 +244,8 @@ grd_rdp_renderer_notify_new_desktop_layout (GrdRdpRenderer *renderer,
 void
 grd_rdp_renderer_notify_graphics_pipeline_ready (GrdRdpRenderer *renderer)
 {
+  g_debug ("[RDP] Renderer: Received Graphics Pipeline ready notification");
+
   renderer->pending_gfx_graphics_reset = TRUE;
   renderer->pending_gfx_init = FALSE;
 
@@ -255,6 +256,8 @@ void
 grd_rdp_renderer_notify_graphics_pipeline_reset (GrdRdpRenderer *renderer)
 {
   gboolean gfx_initable = FALSE;
+
+  g_debug ("[RDP] Renderer: Received Graphics Pipeline reset notification");
 
   g_mutex_lock (&renderer->inhibition_mutex);
   renderer->pending_gfx_init = TRUE;
@@ -397,9 +400,9 @@ maybe_reset_graphics (GrdRdpRenderer *renderer)
         monitor_def->flags = MONITOR_PRIMARY;
     }
 
-  grd_rdp_graphics_pipeline_reset_graphics (renderer->graphics_pipeline,
-                                            desktop_width, desktop_height,
-                                            monitor_defs, n_monitors);
+  grd_rdp_dvc_graphics_pipeline_reset_graphics (renderer->graphics_pipeline,
+                                                desktop_width, desktop_height,
+                                                monitor_defs, n_monitors);
   renderer->pending_gfx_graphics_reset = FALSE;
 }
 
@@ -617,9 +620,9 @@ grd_rdp_renderer_render_frame (GrdRdpRenderer      *renderer,
                                GrdRdpRenderContext *render_context,
                                GrdRdpLegacyBuffer  *buffer)
 {
-  return grd_rdp_graphics_pipeline_refresh_gfx (renderer->graphics_pipeline,
-                                                rdp_surface, render_context,
-                                                buffer);
+  return grd_rdp_dvc_graphics_pipeline_refresh_gfx (renderer->graphics_pipeline,
+                                                    rdp_surface, render_context,
+                                                    buffer);
 }
 
 GrdRdpRenderer *
@@ -975,8 +978,8 @@ submit_rendered_frames (GrdRdpRenderer *renderer,
     {
       GrdRdpFrame *rdp_frame = l->data;
 
-      grd_rdp_graphics_pipeline_submit_frame (renderer->graphics_pipeline,
-                                              rdp_frame);
+      grd_rdp_dvc_graphics_pipeline_submit_frame (renderer->graphics_pipeline,
+                                                  rdp_frame);
       grd_rdp_frame_notify_frame_submission (rdp_frame);
     }
 }
@@ -988,7 +991,6 @@ release_bitstreams (gpointer data,
   GrdRdpRenderer *renderer = user_data;
   GrdRdpFrame *rdp_frame = data;
   GList *bitstreams = grd_rdp_frame_get_bitstreams (rdp_frame);
-  g_autoptr (GError) error = NULL;
   GList *l;
 
   for (l = bitstreams; l; l = l->next)
@@ -998,6 +1000,7 @@ release_bitstreams (gpointer data,
       GrdEncodeSession *encode_session =
         grd_rdp_render_context_get_encode_session (render_context);
       GrdBitstream *bitstream = l->data;
+      g_autoptr (GError) error = NULL;
 
       if (!grd_encode_session_unlock_bitstream (encode_session, bitstream,
                                                 &error))

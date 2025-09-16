@@ -17,8 +17,7 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_RENDER_CONTEXT_H
-#define GRD_RDP_RENDER_CONTEXT_H
+#pragma once
 
 #include <cairo/cairo.h>
 #include <glib-object.h>
@@ -36,12 +35,12 @@ typedef enum
   GRD_RDP_CODEC_AVC444v2,
 } GrdRdpCodec;
 
-GrdRdpRenderContext *grd_rdp_render_context_new (GrdRdpGraphicsPipeline *graphics_pipeline,
-                                                 GrdRdpSurface          *rdp_surface,
-                                                 GrdEglThread           *egl_thread,
-                                                 GrdVkDevice            *vk_device,
-                                                 GrdHwAccelVaapi        *hwaccel_vaapi,
-                                                 GrdRdpSwEncoderCa      *encoder_ca);
+GrdRdpRenderContext *grd_rdp_render_context_new (GrdRdpDvcGraphicsPipeline *graphics_pipeline,
+                                                 GrdRdpSurface             *rdp_surface,
+                                                 GrdEglThread              *egl_thread,
+                                                 GrdVkDevice               *vk_device,
+                                                 GrdHwAccelVaapi           *hwaccel_vaapi,
+                                                 GrdRdpSwEncoderCa         *encoder_ca);
 
 GrdRdpCodec grd_rdp_render_context_get_codec (GrdRdpRenderContext *render_context);
 
@@ -67,5 +66,3 @@ void grd_rdp_render_context_update_frame_state (GrdRdpRenderContext *render_cont
 void grd_rdp_render_context_fetch_progressive_render_state (GrdRdpRenderContext  *render_context,
                                                             GrdImageView        **image_view,
                                                             cairo_region_t      **damage_region);
-
-#endif /* GRD_RDP_RENDER_CONTEXT_H */

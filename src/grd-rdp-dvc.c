@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Pascal Nowack
+ * Copyright (C) 2025 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -21,272 +21,145 @@
 
 #include "grd-rdp-dvc.h"
 
-#include "grd-rdp-private.h"
-
-typedef struct _DVCSubscription
+typedef struct
 {
-  gboolean notified;
+  GrdRdpDvcHandler *dvc_handler;
+  GrdSessionRdp *session_rdp;
+  GrdRdpChannel channel;
 
-  GrdRdpDVCCreationStatusCallback callback;
-  gpointer user_data;
-} DVCSubscription;
+  gboolean channel_unavailable;
 
-typedef struct _DVCNotification
-{
-  int32_t creation_status;
-  gboolean pending_status;
-
-  GHashTable *subscriptions;
-  uint32_t next_subscription_id;
-} DVCNotification;
-
-struct _GrdRdpDvc
-{
-  GObject parent;
-
-  GMutex dvc_notification_mutex;
-  GHashTable *dvc_table;
-  GSource *dvc_notification_source;
-};
-
-G_DEFINE_TYPE (GrdRdpDvc, grd_rdp_dvc, G_TYPE_OBJECT)
-
-static DVCNotification *
-dvc_notification_new (void)
-{
-  DVCNotification *dvc_notification;
-
-  dvc_notification = g_new0 (DVCNotification, 1);
-  dvc_notification->pending_status = TRUE;
-  dvc_notification->subscriptions = g_hash_table_new_full (NULL, NULL,
-                                                           NULL, g_free);
-
-  return dvc_notification;
-}
-
-static uint32_t
-get_next_free_dvc_subscription_id (DVCNotification *dvc_notification)
-{
-  uint32_t subscription_id = dvc_notification->next_subscription_id;
-
-  while (g_hash_table_contains (dvc_notification->subscriptions,
-                                GUINT_TO_POINTER (subscription_id)))
-    ++subscription_id;
-
-  dvc_notification->next_subscription_id = subscription_id + 1;
-
-  return subscription_id;
-}
-
-static uint32_t
-dvc_notification_add_subscription (DVCNotification *dvc_notification,
-                                   DVCSubscription *dvc_subscription)
-{
+  uint32_t channel_id;
   uint32_t subscription_id;
+  gboolean is_subscribed;
 
-  subscription_id = get_next_free_dvc_subscription_id (dvc_notification);
-  g_hash_table_insert (dvc_notification->subscriptions,
-                       GUINT_TO_POINTER (subscription_id), dvc_subscription);
+  GSource *channel_teardown_source;
+} GrdRdpDvcPrivate;
 
-  return subscription_id;
-}
+G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (GrdRdpDvc, grd_rdp_dvc,
+                                     G_TYPE_OBJECT)
 
-uint32_t
-grd_rdp_dvc_subscribe_dvc_creation_status (GrdRdpDvc                       *rdp_dvc,
-                                           uint32_t                         channel_id,
-                                           GrdRdpDVCCreationStatusCallback  callback,
-                                           gpointer                         callback_user_data)
+void
+grd_rdp_dvc_initialize_base (GrdRdpDvc        *dvc,
+                             GrdRdpDvcHandler *dvc_handler,
+                             GrdSessionRdp    *session_rdp,
+                             GrdRdpChannel     channel)
 {
-  DVCNotification *dvc_notification;
-  g_autofree DVCSubscription *dvc_subscription = NULL;
-  uint32_t subscription_id;
-  gboolean pending_notification = FALSE;
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
 
-  dvc_subscription = g_new0 (DVCSubscription, 1);
-  dvc_subscription->callback = callback;
-  dvc_subscription->user_data = callback_user_data;
-
-  g_mutex_lock (&rdp_dvc->dvc_notification_mutex);
-  if (g_hash_table_lookup_extended (rdp_dvc->dvc_table,
-                                    GUINT_TO_POINTER (channel_id),
-                                    NULL, (gpointer *) &dvc_notification))
-    {
-      subscription_id =
-        dvc_notification_add_subscription (dvc_notification,
-                                           g_steal_pointer (&dvc_subscription));
-
-      if (!dvc_notification->pending_status)
-        pending_notification = TRUE;
-    }
-  else
-    {
-      dvc_notification = dvc_notification_new ();
-
-      subscription_id =
-        dvc_notification_add_subscription (dvc_notification,
-                                           g_steal_pointer (&dvc_subscription));
-
-      g_hash_table_insert (rdp_dvc->dvc_table,
-                           GUINT_TO_POINTER (channel_id), dvc_notification);
-    }
-  g_mutex_unlock (&rdp_dvc->dvc_notification_mutex);
-
-  if (pending_notification)
-    g_source_set_ready_time (rdp_dvc->dvc_notification_source, 0);
-
-  return subscription_id;
+  priv->dvc_handler = dvc_handler;
+  priv->session_rdp = session_rdp;
+  priv->channel = channel;
 }
 
 void
-grd_rdp_dvc_unsubscribe_dvc_creation_status (GrdRdpDvc *rdp_dvc,
-                                             uint32_t   channel_id,
-                                             uint32_t   subscription_id)
+grd_rdp_dvc_maybe_init (GrdRdpDvc *dvc)
 {
-  DVCNotification *dvc_notification;
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
+  GrdRdpDvcClass *klass = GRD_RDP_DVC_GET_CLASS (dvc);
 
-  g_mutex_lock (&rdp_dvc->dvc_notification_mutex);
-  if (!g_hash_table_lookup_extended (rdp_dvc->dvc_table,
-                                     GUINT_TO_POINTER (channel_id),
-                                     NULL, (gpointer *) &dvc_notification))
-    g_assert_not_reached ();
+  if (priv->channel_unavailable)
+    return;
 
-  g_hash_table_remove (dvc_notification->subscriptions,
-                       GUINT_TO_POINTER (subscription_id));
-  g_mutex_unlock (&rdp_dvc->dvc_notification_mutex);
+  klass->maybe_init (dvc);
 }
 
-static BOOL
-dvc_creation_status (void     *user_data,
-                     uint32_t  channel_id,
-                     int32_t   creation_status)
+void
+grd_rdp_dvc_queue_channel_tear_down (GrdRdpDvc *dvc)
 {
-  RdpPeerContext *rdp_peer_context = user_data;
-  GrdRdpDvc *rdp_dvc = rdp_peer_context->rdp_dvc;
-  DVCNotification *dvc_notification;
-  gboolean pending_notification = FALSE;
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
 
-  g_debug ("[RDP.DRDYNVC] DVC channel id %u creation status: %i",
-           channel_id, creation_status);
+  priv->channel_unavailable = TRUE;
 
-  g_mutex_lock (&rdp_dvc->dvc_notification_mutex);
-  if (g_hash_table_lookup_extended (rdp_dvc->dvc_table,
-                                    GUINT_TO_POINTER (channel_id),
-                                    NULL, (gpointer *) &dvc_notification))
-    {
-      if (dvc_notification->pending_status)
-        {
-          dvc_notification->creation_status = creation_status;
-          dvc_notification->pending_status = FALSE;
-
-          if (g_hash_table_size (dvc_notification->subscriptions) > 0)
-            pending_notification = TRUE;
-        }
-      else
-        {
-          g_warning ("[RDP.DRDYNVC] Status of channel %u already known. "
-                     "Discarding result", channel_id);
-        }
-    }
-  else
-    {
-      dvc_notification = dvc_notification_new ();
-
-      dvc_notification->creation_status = creation_status;
-      dvc_notification->pending_status = FALSE;
-
-      g_hash_table_insert (rdp_dvc->dvc_table,
-                           GUINT_TO_POINTER (channel_id), dvc_notification);
-    }
-  g_mutex_unlock (&rdp_dvc->dvc_notification_mutex);
-
-  if (pending_notification)
-    g_source_set_ready_time (rdp_dvc->dvc_notification_source, 0);
-
-  return TRUE;
+  g_source_set_ready_time (priv->channel_teardown_source, 0);
 }
 
-GrdRdpDvc *
-grd_rdp_dvc_new (HANDLE      vcm,
-                 rdpContext *rdp_context)
+void
+grd_rdp_dvc_subscribe_creation_status (GrdRdpDvc                       *dvc,
+                                       uint32_t                         channel_id,
+                                       GrdRdpDVCCreationStatusCallback  callback,
+                                       gpointer                         callback_user_data)
 {
-  GrdRdpDvc *rdp_dvc;
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
 
-  rdp_dvc = g_object_new (GRD_TYPE_RDP_DVC, NULL);
+  g_assert (!priv->is_subscribed);
 
-  WTSVirtualChannelManagerSetDVCCreationCallback (vcm, dvc_creation_status,
-                                                  rdp_context);
+  priv->channel_id = channel_id;
 
-  return rdp_dvc;
+  priv->subscription_id =
+    grd_rdp_dvc_handler_subscribe_dvc_creation_status (priv->dvc_handler,
+                                                       channel_id,
+                                                       callback,
+                                                       callback_user_data);
+  priv->is_subscribed = TRUE;
+}
+
+void
+grd_rdp_dvc_maybe_unsubscribe_creation_status (GrdRdpDvc *dvc)
+{
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
+
+  if (!priv->is_subscribed)
+    return;
+
+  grd_rdp_dvc_handler_unsubscribe_dvc_creation_status (priv->dvc_handler,
+                                                       priv->channel_id,
+                                                       priv->subscription_id);
+  priv->is_subscribed = FALSE;
 }
 
 static void
 grd_rdp_dvc_dispose (GObject *object)
 {
-  GrdRdpDvc *rdp_dvc = GRD_RDP_DVC (object);
+  GrdRdpDvc *dvc = GRD_RDP_DVC (object);
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
 
-  if (rdp_dvc->dvc_notification_source)
+  if (priv->channel_teardown_source)
     {
-      g_source_destroy (rdp_dvc->dvc_notification_source);
-      g_clear_pointer (&rdp_dvc->dvc_notification_source, g_source_unref);
+      g_source_destroy (priv->channel_teardown_source);
+      g_clear_pointer (&priv->channel_teardown_source, g_source_unref);
     }
-
-  g_clear_pointer (&rdp_dvc->dvc_table, g_hash_table_unref);
 
   G_OBJECT_CLASS (grd_rdp_dvc_parent_class)->dispose (object);
 }
 
-static void
-grd_rdp_dvc_finalize (GObject *object)
+static const char *
+channel_to_string (GrdRdpChannel channel)
 {
-  GrdRdpDvc *rdp_dvc = GRD_RDP_DVC (object);
+  switch (channel)
+    {
+    case GRD_RDP_CHANNEL_NONE:
+      g_assert_not_reached ();
+      break;
+    case GRD_RDP_CHANNEL_AUDIO_INPUT:
+      return "AUDIO_INPUT";
+    case GRD_RDP_CHANNEL_AUDIO_PLAYBACK:
+      return "AUDIO_PLAYBACK";
+    case GRD_RDP_CHANNEL_DISPLAY_CONTROL:
+      return "DISP";
+    case GRD_RDP_CHANNEL_GRAPHICS_PIPELINE:
+      return "RDPGFX";
+    case GRD_RDP_CHANNEL_INPUT:
+      return "INPUT";
+    case GRD_RDP_CHANNEL_TELEMETRY:
+      return "TELEMETRY";
+    }
 
-  g_mutex_clear (&rdp_dvc->dvc_notification_mutex);
-
-  G_OBJECT_CLASS (grd_rdp_dvc_parent_class)->finalize (object);
-}
-
-static void
-dvc_notification_free (gpointer data)
-{
-  DVCNotification *dvc_notification = data;
-
-  g_clear_pointer (&dvc_notification->subscriptions, g_hash_table_unref);
-
-  g_free (dvc_notification);
+  g_assert_not_reached ();
 }
 
 static gboolean
-notify_channels (gpointer user_data)
+tear_down_channel (gpointer user_data)
 {
-  GrdRdpDvc *rdp_dvc = user_data;
-  GHashTableIter iter;
-  DVCNotification *dvc_notification;
+  GrdRdpDvc *dvc = user_data;
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
 
-  g_mutex_lock (&rdp_dvc->dvc_notification_mutex);
-  g_hash_table_iter_init (&iter, rdp_dvc->dvc_table);
-  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &dvc_notification))
-    {
-      GHashTableIter iter2;
-      DVCSubscription *dvc_subscription;
+  g_debug ("[RDP.%s] Tearing down channel", channel_to_string (priv->channel));
 
-      if (dvc_notification->pending_status)
-        continue;
+  g_clear_pointer (&priv->channel_teardown_source, g_source_unref);
+  grd_session_rdp_tear_down_channel (priv->session_rdp, priv->channel);
 
-      g_hash_table_iter_init (&iter2, dvc_notification->subscriptions);
-      while (g_hash_table_iter_next (&iter2, NULL, (gpointer *) &dvc_subscription))
-        {
-          if (dvc_subscription->notified)
-            continue;
-
-          dvc_subscription->callback (dvc_subscription->user_data,
-                                      dvc_notification->creation_status);
-
-          dvc_subscription->notified = TRUE;
-        }
-    }
-  g_mutex_unlock (&rdp_dvc->dvc_notification_mutex);
-
-  return G_SOURCE_CONTINUE;
+  return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -305,19 +178,17 @@ static GSourceFuncs source_funcs =
 };
 
 static void
-grd_rdp_dvc_init (GrdRdpDvc *rdp_dvc)
+grd_rdp_dvc_init (GrdRdpDvc *dvc)
 {
-  rdp_dvc->dvc_table = g_hash_table_new_full (NULL, NULL,
-                                              NULL, dvc_notification_free);
+  GrdRdpDvcPrivate *priv = grd_rdp_dvc_get_instance_private (dvc);
+  GSource *channel_teardown_source;
 
-  g_mutex_init (&rdp_dvc->dvc_notification_mutex);
-
-  rdp_dvc->dvc_notification_source = g_source_new (&source_funcs,
-                                                   sizeof (GSource));
-  g_source_set_callback (rdp_dvc->dvc_notification_source,
-                         notify_channels, rdp_dvc, NULL);
-  g_source_set_ready_time (rdp_dvc->dvc_notification_source, -1);
-  g_source_attach (rdp_dvc->dvc_notification_source, NULL);
+  channel_teardown_source = g_source_new (&source_funcs, sizeof (GSource));
+  g_source_set_callback (channel_teardown_source, tear_down_channel,
+                         dvc, NULL);
+  g_source_set_ready_time (channel_teardown_source, -1);
+  g_source_attach (channel_teardown_source, NULL);
+  priv->channel_teardown_source = channel_teardown_source;
 }
 
 static void
@@ -326,5 +197,4 @@ grd_rdp_dvc_class_init (GrdRdpDvcClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->dispose = grd_rdp_dvc_dispose;
-  object_class->finalize = grd_rdp_dvc_finalize;
 }

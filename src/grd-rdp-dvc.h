@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Pascal Nowack
+ * Copyright (C) 2025 Pascal Nowack
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -17,29 +17,36 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_DVC_H
-#define GRD_RDP_DVC_H
+#pragma once
 
-#include <freerdp/channels/wtsvc.h>
 #include <glib-object.h>
 
+#include "grd-rdp-dvc-handler.h"
+#include "grd-session-rdp.h"
+
 #define GRD_TYPE_RDP_DVC (grd_rdp_dvc_get_type ())
-G_DECLARE_FINAL_TYPE (GrdRdpDvc, grd_rdp_dvc,
-                      GRD, RDP_DVC, GObject)
+G_DECLARE_DERIVABLE_TYPE (GrdRdpDvc, grd_rdp_dvc,
+                          GRD, RDP_DVC, GObject)
 
-typedef void (* GrdRdpDVCCreationStatusCallback) (gpointer user_data,
-                                                  int32_t  creation_status);
+struct _GrdRdpDvcClass
+{
+  GObjectClass parent_class;
 
-GrdRdpDvc *grd_rdp_dvc_new (HANDLE      vcm,
-                            rdpContext *rdp_context);
+  void (* maybe_init) (GrdRdpDvc *dvc);
+};
 
-uint32_t grd_rdp_dvc_subscribe_dvc_creation_status (GrdRdpDvc                       *rdp_dvc,
-                                                    uint32_t                         channel_id,
-                                                    GrdRdpDVCCreationStatusCallback  callback,
-                                                    gpointer                         callback_user_data);
+void grd_rdp_dvc_initialize_base (GrdRdpDvc        *dvc,
+                                  GrdRdpDvcHandler *dvc_handler,
+                                  GrdSessionRdp    *session_rdp,
+                                  GrdRdpChannel     channel);
 
-void grd_rdp_dvc_unsubscribe_dvc_creation_status (GrdRdpDvc *rdp_dvc,
-                                                  uint32_t   channel_id,
-                                                  uint32_t   subscription_id);
+void grd_rdp_dvc_maybe_init (GrdRdpDvc *dvc);
 
-#endif /* GRD_RDP_DVC_H */
+void grd_rdp_dvc_queue_channel_tear_down (GrdRdpDvc *dvc);
+
+void grd_rdp_dvc_subscribe_creation_status (GrdRdpDvc                       *dvc,
+                                            uint32_t                         channel_id,
+                                            GrdRdpDVCCreationStatusCallback  callback,
+                                            gpointer                         callback_user_data);
+
+void grd_rdp_dvc_maybe_unsubscribe_creation_status (GrdRdpDvc *dvc);

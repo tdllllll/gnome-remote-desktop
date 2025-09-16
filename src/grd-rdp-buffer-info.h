@@ -17,8 +17,7 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_BUFFER_INFO_H
-#define GRD_RDP_BUFFER_INFO_H
+#pragma once
 
 #include <stdint.h>
 
@@ -37,5 +36,3 @@ struct _GrdRdpBufferInfo
   uint64_t drm_format_modifier;
   gboolean has_vk_image;
 };
-
-#endif /* GRD_RDP_BUFFER_INFO_H */

@@ -17,8 +17,7 @@
  * 02111-1307, USA.
  */
 
-#ifndef GRD_RDP_AUDIO_OUTPUT_STREAM_H
-#define GRD_RDP_AUDIO_OUTPUT_STREAM_H
+#pragma once
 
 #include <glib-object.h>
 #include <spa/param/audio/raw.h>
@@ -38,19 +37,17 @@ struct _GrdRdpAudioVolumeData
   uint32_t n_volumes;
 };
 
-GrdRdpAudioOutputStream *grd_rdp_audio_output_stream_new (GrdRdpAudioPlayback  *audio_playback,
-                                                          struct pw_core       *pipewire_core,
-                                                          struct pw_registry   *pipewire_registry,
-                                                          uint32_t              target_node_id,
-                                                          uint32_t              n_samples_per_sec,
-                                                          uint32_t              n_channels,
-                                                          uint32_t             *position,
-                                                          GError              **error);
+GrdRdpAudioOutputStream *grd_rdp_audio_output_stream_new (GrdRdpDvcAudioPlayback  *audio_playback,
+                                                          struct pw_core          *pipewire_core,
+                                                          struct pw_registry      *pipewire_registry,
+                                                          uint32_t                 target_node_id,
+                                                          uint32_t                 n_samples_per_sec,
+                                                          uint32_t                 n_channels,
+                                                          uint32_t                *position,
+                                                          GError                 **error);
 
 void grd_rdp_audio_output_stream_set_active (GrdRdpAudioOutputStream *audio_output_stream,
                                              gboolean                 active);
 
 void grd_rdp_audio_output_stream_get_volume_data (GrdRdpAudioOutputStream *audio_output_stream,
                                                   GrdRdpAudioVolumeData   *volume_data);
-
-#endif /* GRD_RDP_AUDIO_OUTPUT_STREAM_H */
