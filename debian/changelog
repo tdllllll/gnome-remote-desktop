@@ -1,8 +1,14 @@
-gnome-remote-desktop (48.2-1) UNRELEASED; urgency=medium
+gnome-remote-desktop (48.2-1) unstable; urgency=medium
 
+  [ Jeremy Bícha ]
   * New upstream release
+  * Bump Standards Version to 4.7.2
+  * Remove obsolete Rules-Requires-Root: no field
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 08:52:49 -0400
+  [ Alessandro Astone ]
+  * debian/patches: Drop patch applied upstream
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 08:53:49 -0400
 
 gnome-remote-desktop (48.1-4) unstable; urgency=medium
 
