@@ -1,8 +1,13 @@
-gnome-remote-desktop (49.0-1) UNRELEASED; urgency=medium
+gnome-remote-desktop (49.0-1) experimental; urgency=medium
 
+  [ Jeremy Bícha ]
   * New upstream release
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 08:45:14 -0400
+  [ Alessandro Astone ]
+  * debian/control: Update Build-Depends minimum versions
+  * debian/control: Bump mutter API
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 09:00:30 -0400
 
 gnome-remote-desktop (48.2-1) unstable; urgency=medium
 
