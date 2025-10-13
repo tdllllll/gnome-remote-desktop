@@ -49,6 +49,8 @@ enum
 
 enum
 {
+  READY,
+  STARTED,
   STOPPED,
   TOUCH_DEVICE_ADDED,
   TOUCH_DEVICE_REMOVED,
@@ -237,6 +239,8 @@ grd_session_flush_input_async (GrdSession          *session,
 {
   GrdSessionPrivate *priv = grd_session_get_instance_private (session);
   GrdEiPing *ping;
+
+  g_assert (priv->is_ready);
 
   ping = g_new0 (GrdEiPing, 1);
   ping->task = g_task_new (session,
@@ -1038,7 +1042,6 @@ on_session_start_finished (GObject      *object,
   GrdDBusMutterRemoteDesktopSession *proxy;
   GrdSession *session;
   GrdSessionPrivate *priv;
-  GrdSessionClass *klass;
   g_autoptr (GError) error = NULL;
 
   proxy = GRD_DBUS_MUTTER_REMOTE_DESKTOP_SESSION (object);
@@ -1056,12 +1059,9 @@ on_session_start_finished (GObject      *object,
 
   session = GRD_SESSION (user_data);
   priv = grd_session_get_instance_private (session);
-  klass = GRD_SESSION_GET_CLASS (session);
 
   priv->started = TRUE;
-
-  if (klass->remote_desktop_session_started)
-    klass->remote_desktop_session_started (session);
+  g_signal_emit (session, signals[STARTED], 0);
 }
 
 static void
@@ -1421,6 +1421,12 @@ grd_ei_source_dispatch (gpointer user_data)
       switch (ei_event_type)
         {
         case EI_EVENT_CONNECT:
+          if (!priv->is_ready)
+            {
+              priv->is_ready = TRUE;
+              g_signal_emit (session, signals[READY], 0);
+            }
+          break;
         case EI_EVENT_DISCONNECT:
           break;
         case EI_EVENT_SEAT_ADDED:
@@ -1603,7 +1609,6 @@ on_eis_connected (GObject      *object,
   g_autoptr (GUnixFDList) fd_list = NULL;
   GrdSession *session;
   GrdSessionPrivate *priv;
-  GrdSessionClass *klass;
   int fd_idx = -1;
   int fd;
   g_autoptr (GError) error = NULL;
@@ -1630,7 +1635,6 @@ on_eis_connected (GObject      *object,
 
   session = GRD_SESSION (user_data);
   priv = grd_session_get_instance_private (session);
-  klass = GRD_SESSION_GET_CLASS (session);
 
   fd_idx = g_variant_get_handle (fd_variant);
   if (!G_IS_UNIX_FD_LIST (fd_list) ||
@@ -1692,11 +1696,6 @@ on_eis_connected (GObject      *object,
                                                    priv->cancellable,
                                                    on_screen_cast_session_created,
                                                    session);
-
-  priv->is_ready = TRUE;
-
-  if (klass->remote_desktop_session_ready)
-    klass->remote_desktop_session_ready (session);
 }
 
 static void
@@ -1940,6 +1939,18 @@ grd_session_class_init (GrdSessionClass *klass)
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
 
+  signals[READY] = g_signal_new ("ready",
+                                 G_TYPE_FROM_CLASS (klass),
+                                 G_SIGNAL_RUN_LAST,
+                                 0,
+                                 NULL, NULL, NULL,
+                                 G_TYPE_NONE, 0);
+  signals[STARTED] = g_signal_new ("started",
+                                   G_TYPE_FROM_CLASS (klass),
+                                   G_SIGNAL_RUN_LAST,
+                                   0,
+                                   NULL, NULL, NULL,
+                                   G_TYPE_NONE, 0);
   signals[STOPPED] = g_signal_new ("stopped",
                                    G_TYPE_FROM_CLASS (klass),
                                    G_SIGNAL_RUN_LAST,
