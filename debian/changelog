@@ -1,3 +1,10 @@
+gnome-remote-desktop (49.0-0ubuntu1.1) questing; urgency=medium
+
+  * d/p/lp-2127792-fix-nvenc-blackwell.patch: Fix NVENC video streaming on 
+    blackwell GPUs (LP: #2127792) 
+
+ -- Antoine Lassagne <antoine.lassagne@canonical.com>  Tue, 14 Oct 2025 09:44:18 +0200
+
 gnome-remote-desktop (49.0-0ubuntu1) questing; urgency=medium
 
   * New upstream release
