@@ -1035,6 +1035,18 @@ grd_session_selection_read (GrdSession  *session,
 }
 
 static void
+maybe_emit_started_signal (GrdSession *session)
+{
+  GrdSessionPrivate *priv = grd_session_get_instance_private (session);
+
+  if (!priv->is_ready ||
+      !priv->started)
+    return;
+
+  g_signal_emit (session, signals[STARTED], 0);
+}
+
+static void
 on_session_start_finished (GObject      *object,
                            GAsyncResult *result,
                            gpointer      user_data)
@@ -1061,7 +1073,7 @@ on_session_start_finished (GObject      *object,
   priv = grd_session_get_instance_private (session);
 
   priv->started = TRUE;
-  g_signal_emit (session, signals[STARTED], 0);
+  maybe_emit_started_signal (session);
 }
 
 static void
@@ -1425,6 +1437,7 @@ grd_ei_source_dispatch (gpointer user_data)
             {
               priv->is_ready = TRUE;
               g_signal_emit (session, signals[READY], 0);
+              maybe_emit_started_signal (session);
             }
           break;
         case EI_EVENT_DISCONNECT:
@@ -1813,6 +1826,9 @@ grd_session_finalize (GObject *object)
     g_assert (g_cancellable_is_cancelled (priv->cancellable));
   g_clear_object (&priv->cancellable);
 
+  g_assert (!priv->ei_source);
+
+  g_clear_pointer (&priv->pings, g_hash_table_unref);
   g_clear_pointer (&priv->touch_regions, g_hash_table_unref);
   g_clear_pointer (&priv->abs_pointer_regions, g_hash_table_unref);
 
@@ -1825,7 +1841,6 @@ grd_session_finalize (GObject *object)
   g_assert (!priv->ei_abs_pointer);
   g_assert (!priv->ei_pointer);
   g_assert (!priv->ei_seat);
-  g_assert (!priv->ei_source);
   g_assert (!priv->ei);
 
   g_assert (!priv->remote_desktop_session);
@@ -1891,6 +1906,8 @@ cancel_and_free_ping (gpointer user_data)
   cancellable = g_task_get_cancellable (ping->task);
   if (!g_cancellable_is_cancelled (cancellable))
     g_cancellable_cancel (cancellable);
+
+  g_task_return_error_if_cancelled (ping->task);
   grd_ei_ping_free (ping);
 }
 
