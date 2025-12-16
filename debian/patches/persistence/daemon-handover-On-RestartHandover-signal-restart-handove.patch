@@ -1,0 +1,55 @@
+From: Joan Torres <joan.torres@suse.com>
+Date: Fri, 22 Mar 2024 17:34:03 +0100
+Subject: daemon-handover: On "RestartHandover" signal, restart handover again
+
+Now there can be an orphan/lingering headless session, with a
+daemon-handover attached to it. It is possible to continue to use that
+session. To do that, the daemon-system will emit on the correspondent
+handover iface the "RestartHandover" signal and a new RDP client will
+end up on this session again.
+
+Bug: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/issues/193
+Bug-Ubuntu: https://launchpad.net/bugs/2072130
+Origin: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/249
+---
+ src/grd-daemon-handover.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/src/grd-daemon-handover.c b/src/grd-daemon-handover.c
+index d3cb47b..30c26ff 100644
+--- a/src/grd-daemon-handover.c
++++ b/src/grd-daemon-handover.c
+@@ -455,6 +455,24 @@ on_redirect_client (GrdDBusRemoteDesktopRdpHandover *interface,
+     grd_session_stop (daemon_handover->session);
+ }
+ 
++static void
++on_restart_handover (GrdDBusRemoteDesktopRdpHandover *proxy,
++                     GrdDaemonHandover               *daemon_handover)
++{
++  GrdDaemon *daemon = GRD_DAEMON (daemon_handover);
++  GrdContext *context = grd_daemon_get_context (daemon);
++  GrdSettings *settings = grd_context_get_settings (context);
++  g_autofree char *username = NULL;
++  g_autofree char *password = NULL;
++
++  if (!grd_settings_get_rdp_credentials (settings,
++                                         &username, &password,
++                                         NULL))
++    g_assert_not_reached ();
++
++  start_handover (daemon_handover, username, password);
++}
++
+ static void
+ on_remote_desktop_rdp_handover_proxy_acquired (GObject      *object,
+                                                GAsyncResult *result,
+@@ -478,6 +496,8 @@ on_remote_desktop_rdp_handover_proxy_acquired (GObject      *object,
+ 
+   g_signal_connect (daemon_handover->remote_desktop_handover, "redirect-client",
+                     G_CALLBACK (on_redirect_client), daemon_handover);
++  g_signal_connect (daemon_handover->remote_desktop_handover, "restart-handover",
++                    G_CALLBACK (on_restart_handover), daemon_handover);
+ 
+   grd_daemon_maybe_enable_services (GRD_DAEMON (daemon_handover));
+ }

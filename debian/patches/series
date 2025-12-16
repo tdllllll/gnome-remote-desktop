@@ -1,2 +1,7 @@
 fdkaac.patch
 lp-2127792-fix-nvenc-blackwell.patch
+persistence/daemon-handover-On-disconnect-logout-only-when-being-at-a.patch
+persistence/daemon-system-Allow-handover-to-an-orphaned-session.patch
+persistence/daemon-handover-On-RestartHandover-signal-restart-handove.patch
+persistence/daemon-handover-When-taking-a-new-client-disconnect-the-c.patch
+persistence/daemon-handover-Don-t-logout-on-handover-fail.patch

@@ -1,0 +1,114 @@
+From: Joan Torres <joan.torres@suse.com>
+Date: Fri, 22 Mar 2024 16:57:06 +0100
+Subject: daemon-system: Allow handover to an orphaned session
+
+When disconnecting from a headless user session, it will now not be
+destroyed. Instead, this session is now orphan.
+For that session, there's a lingering remote_client at daemon-system.
+
+1. When on a new connection, there's a new remote_client, and a new
+   RemoteDisplay (greeter) linked to it.
+2. A successful authentication happens to open this orphan session.
+3. GDM updates the RemoteDisplay of the orphan session with the new
+   remote_client id.
+4. The daemon-system receives that update. It knows that for that
+   RemoteDisplay there is an old remote_client. And with this new
+   remote_client id it knows there is a new remote_client.
+5. The handover iface from the old remote_client is unregistered and
+   the remote_client is removed.
+6. A new handover is registered to communicate with the orphan session
+   again, but this time from this new remote_client.
+   Now the new remote_client has handover_src connected to the greeter
+   session and handover_dst connected to the orphan session.
+7. On handover_dst, the new signal "RestartHandover" is emitted to make
+   the daemon-handover at the orphan session start again the handover
+   and get the RDP client.
+
+Bug: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/issues/193
+Bug-Ubuntu: https://launchpad.net/bugs/2072130
+Origin: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/249
+---
+ src/grd-daemon-system.c         | 43 +++++++++++++++++++++++++++++++++++++++++
+ src/org.gnome.RemoteDesktop.xml |  8 ++++++++
+ 2 files changed, 51 insertions(+)
+
+diff --git a/src/grd-daemon-system.c b/src/grd-daemon-system.c
+index 008dda8..bab1cea 100644
+--- a/src/grd-daemon-system.c
++++ b/src/grd-daemon-system.c
+@@ -895,6 +895,45 @@ on_gdm_remote_display_session_id_changed (GrdDBusGdmRemoteDisplay *remote_displa
+     remote_client);
+ }
+ 
++static void
++on_remote_display_remote_id_changed (GrdDBusGdmRemoteDisplay *remote_display,
++                                     GParamSpec              *pspec,
++                                     GrdRemoteClient         *remote_client)
++{
++  GrdDaemonSystem *daemon_system = remote_client->daemon_system;
++  GrdRemoteClient *new_remote_client;
++  const char *remote_id;
++  const char *session_id;
++
++  remote_id = grd_dbus_gdm_remote_display_get_remote_id (remote_display);
++  if (!g_hash_table_lookup_extended (daemon_system->remote_clients,
++                                     remote_id, NULL,
++                                     (gpointer *) &new_remote_client))
++    {
++      g_debug ("[DaemonSystem] GDM set to a remote display a remote "
++               "id %s we didn't know about", remote_id);
++      return;
++    }
++
++  g_debug ("[DaemonSystem] GDM updated a remote display with a new remote id: "
++           "%s", remote_id);
++
++  g_signal_handlers_disconnect_by_func (remote_display,
++                                        G_CALLBACK (on_remote_display_remote_id_changed),
++                                        remote_client);
++  g_signal_connect (remote_display, "notify::remote-id",
++                    G_CALLBACK (on_remote_display_remote_id_changed),
++                    new_remote_client);
++
++  g_hash_table_remove (daemon_system->remote_clients, remote_client->id);
++
++  session_id = grd_dbus_gdm_remote_display_get_session_id (remote_display);
++  register_handover_iface (new_remote_client, session_id);
++
++  grd_dbus_remote_desktop_rdp_handover_emit_restart_handover (
++    new_remote_client->handover_dst->interface);
++}
++
+ static void
+ register_handover_for_display (GrdDaemonSystem         *daemon_system,
+                                GrdDBusGdmRemoteDisplay *remote_display)
+@@ -913,6 +952,10 @@ register_handover_for_display (GrdDaemonSystem         *daemon_system,
+       return;
+     }
+ 
++  g_signal_connect (remote_display, "notify::remote-id",
++                    G_CALLBACK (on_remote_display_remote_id_changed),
++                    remote_client);
++
+   session_id = grd_dbus_gdm_remote_display_get_session_id (remote_display);
+   if (!session_id || strcmp (session_id, "") == 0)
+     {
+diff --git a/src/org.gnome.RemoteDesktop.xml b/src/org.gnome.RemoteDesktop.xml
+index 508d9ff..a7ff0ce 100644
+--- a/src/org.gnome.RemoteDesktop.xml
++++ b/src/org.gnome.RemoteDesktop.xml
+@@ -172,6 +172,14 @@
+       <arg name="password" direction="out" type="s" />
+     </method>
+ 
++    <!--
++        RestartHandover:
++
++        Signal to inform the dst server that a new handover is ready to start.
++        This happens after the first handover.
++    -->
++    <signal name="RestartHandover" />
++
+   </interface>
+ 
+ </node>

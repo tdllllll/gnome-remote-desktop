@@ -1,0 +1,37 @@
+From: Joan Torres <joan.torres@suse.com>
+Date: Tue, 26 Mar 2024 11:13:05 +0100
+Subject: daemon-handover: When taking a new client,
+ disconnect the current one
+
+In headless sessions, the remote desktop client determines the monitor
+configuration. If there are multiple clients, they would clash with each
+other, and no one of them would be able to offer a usable session.
+Hence, stop the existing session, if there is one, before handling the
+new client.
+
+Bug: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/issues/193
+Bug-Ubuntu: https://launchpad.net/bugs/2072130
+Origin: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/249
+---
+ src/grd-daemon-handover.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/grd-daemon-handover.c b/src/grd-daemon-handover.c
+index 30c26ff..88d7809 100644
+--- a/src/grd-daemon-handover.c
++++ b/src/grd-daemon-handover.c
+@@ -369,6 +369,14 @@ on_incoming_new_connection (GrdRdpServer      *rdp_server,
+   GrdContext *context = grd_daemon_get_context (GRD_DAEMON (daemon_handover));
+   GrdSettings *settings = grd_context_get_settings (context);
+ 
++  if (daemon_handover->session)
++    {
++      g_signal_handlers_disconnect_by_func (daemon_handover->session,
++                                            G_CALLBACK (on_session_stopped),
++                                            daemon_handover);
++      grd_session_stop (daemon_handover->session);
++    }
++
+   g_signal_connect (session, "stopped",
+                     G_CALLBACK (on_session_stopped),
+                     daemon_handover);

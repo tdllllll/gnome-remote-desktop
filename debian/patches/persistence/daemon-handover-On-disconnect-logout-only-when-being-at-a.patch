@@ -1,0 +1,48 @@
+From: Joan Torres <joan.torres@suse.com>
+Date: Fri, 22 Mar 2024 16:48:08 +0100
+Subject: daemon-handover: On disconnect, logout only when being at a greeter
+
+When daemon-system disappears, keep the logout behaviour because the new
+daemon-system can't communicate with the old daemon-handover.
+
+Don't logout when handover start fails. This failure should not be
+critical, this allows to keep the session.
+
+Bug: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/issues/193
+Bug-Ubuntu: https://launchpad.net/bugs/2072130
+Origin: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/249
+---
+ src/grd-daemon-handover.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/grd-daemon-handover.c b/src/grd-daemon-handover.c
+index c8f8751..d3cb47b 100644
+--- a/src/grd-daemon-handover.c
++++ b/src/grd-daemon-handover.c
+@@ -228,7 +228,6 @@ on_start_handover_finished (GObject      *object,
+     {
+       g_warning ("[DaemonHandover] Failed to start handover: %s",
+                  error->message);
+-      grd_session_manager_call_logout_sync ();
+       return;
+     }
+ 
+@@ -283,7 +282,8 @@ static void
+ on_session_stopped (GrdSession        *session,
+                     GrdDaemonHandover *daemon_handover)
+ {
+-  grd_session_manager_call_logout_sync ();
++  if (grd_is_remote_login ())
++    grd_session_manager_call_logout_sync ();
+ 
+   daemon_handover->session = NULL;
+ 
+@@ -583,6 +583,8 @@ on_gnome_remote_desktop_name_vanished (GDBusConnection *connection,
+              REMOTE_DESKTOP_BUS_NAME);
+ 
+   g_application_release (G_APPLICATION (daemon_handover));
++
++  grd_session_manager_call_logout_sync ();
+ }
+ 
+ GrdDaemonHandover *
