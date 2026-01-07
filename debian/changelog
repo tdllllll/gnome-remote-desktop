@@ -1,3 +1,10 @@
+gnome-remote-desktop (49.2-2) unstable; urgency=medium
+
+  * Bump Standards Version to 4.7.3
+  * Stop running autopkgtests on i386 (Closes: #1121036)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 07 Jan 2026 12:39:06 -0500
+
 gnome-remote-desktop (49.2-1) unstable; urgency=medium
 
   * New upstream release
