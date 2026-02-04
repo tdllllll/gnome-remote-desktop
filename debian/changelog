@@ -1,3 +1,12 @@
+gnome-remote-desktop (50~beta-1) experimental; urgency=medium
+
+  * New upstream release
+    - d/control: Update dependencies. libkrb5-dev is a new one
+  * d/watch: Update to version 5
+  * Refresh patches
+
+ -- Charles <charles05@canonical.com>  Wed, 04 Feb 2026 23:00:30 +0000
+
 gnome-remote-desktop (49.2-2) unstable; urgency=medium
 
   * Bump Standards Version to 4.7.3
