@@ -1,3 +1,13 @@
+gnome-remote-desktop (49.2-2ubuntu1) resolute; urgency=medium
+
+  * Soften the dependency on libmutter to Recommends because it's really
+    not required until run time, and even then is only a weak assumption
+    that a similar enough DBus protocol is supported. Also allow multiple
+    versions of libmutter where the protocol is known to not have changed
+    (much).
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 04 Feb 2026 14:54:43 +0800
+
 gnome-remote-desktop (49.2-2) unstable; urgency=medium
 
   * Bump Standards Version to 4.7.3
