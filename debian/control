@@ -49,13 +49,13 @@ Homepage: https://wiki.gnome.org/Projects/Mutter/RemoteDesktop
 Package: gnome-remote-desktop
 Architecture: linux-any
 Depends: fuse3,
-         libmutter-17-0,
          pipewire (>= 1.2.0),
          systemd | systemd-sysusers,
          systemd | systemd-tmpfiles,
          wireplumber,
          ${misc:Depends},
          ${shlibs:Depends}
+Recommends: libmutter-17-0 | libmutter-18-0
 Breaks: gnome-control-center (<< 1:42)
 Description: Remote desktop daemon for GNOME using PipeWire
  This daemon enables GNOME to offer remote desktop sharing and control
