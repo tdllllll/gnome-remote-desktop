@@ -55,6 +55,8 @@ void grd_sync_point_init (GrdSyncPoint *sync_point);
 
 void grd_sync_point_clear (GrdSyncPoint *sync_point);
 
+void grd_sync_point_reset (GrdSyncPoint *sync_point);
+
 void grd_sync_point_complete (GrdSyncPoint *sync_point,
                               gboolean      success);
 
@@ -99,3 +101,29 @@ gboolean grd_systemd_get_unit (GBusType     bus_type,
 gboolean grd_systemd_unit_get_active_state (GDBusProxy                 *unit_proxy,
                                             GrdSystemdUnitActiveState  *active_state,
                                             GError                    **error);
+
+void grd_close_connection_and_notify (GSocketConnection *connection);
+
+static inline int64_t
+us (int64_t us)
+{
+  return us;
+}
+
+static inline int64_t
+ms2us (int64_t ms)
+{
+  return us (ms * 1000);
+}
+
+static inline uint64_t
+s2ns (uint64_t s)
+{
+  return s * G_USEC_PER_SEC * UINT64_C (1000);
+}
+
+static inline int64_t
+s2us (uint64_t s)
+{
+  return ms2us (s * 1000);
+}

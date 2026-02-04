@@ -32,6 +32,8 @@
     <property name="TlsCert" type="s" access="read" />
     <property name="TlsFingerprint" type="s" access="read" />
     <property name="TlsKey" type="s" access="read" />
+    <property name="AuthMethods" type="u" access="read" />
+    <property name="KerberosKeytab" type="s" access="read" />
     <property name="ViewOnly" type="b" access="read" />
 
     <!--
@@ -43,6 +45,13 @@
     <signal name="Binding">
       <arg name="port" type="i" />
     </signal>
+
+    <!--
+        NewConnection:
+
+        Signal to inform that the RDP server has received a new connection.
+    -->
+    <signal name="NewConnection" />
 
   </interface>
 
@@ -60,6 +69,8 @@
     <property name="TlsCert" type="s" access="read" />
     <property name="TlsFingerprint" type="s" access="read" />
     <property name="TlsKey" type="s" access="read" />
+    <property name="AuthMethods" type="u" access="read" />
+    <property name="KerberosKeytab" type="s" access="read" />
 
     <method name="Enable" />
 
@@ -190,12 +201,11 @@
     </method>
 
     <!--
-        RestartHandover:
+        HandoverIsWaiting:
 
-        Signal to inform the dst server that a new handover is ready to start.
-        This happens after the first handover.
-    -->
-    <signal name="RestartHandover" />
+        Property to inform the dst server that a new handover is ready to start.
+     -->
+    <property name="HandoverIsWaiting" type="b" access="read" />
 
   </interface>
 

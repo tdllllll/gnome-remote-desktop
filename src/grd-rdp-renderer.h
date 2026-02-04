@@ -19,9 +19,11 @@
 
 #pragma once
 
-#include <freerdp/freerdp.h>
 #include <glib-object.h>
+#include <stdint.h>
+#include <vulkan/vulkan.h>
 
+#include "grd-rdp-renderer.h"
 #include "grd-types.h"
 
 #define GRD_TYPE_RDP_RENDERER (grd_rdp_renderer_get_type ())
@@ -35,20 +37,24 @@ typedef enum
   GRD_RDP_ACQUIRE_CONTEXT_FLAG_RETAIN_OR_NULL = 1 << 1,
 } GrdRdpAcquireContextFlags;
 
-GrdRdpRenderer *grd_rdp_renderer_new (GrdSessionRdp    *session_rdp,
-                                      GrdHwAccelNvidia *hwaccel_nvidia);
+GrdRdpRenderer *grd_rdp_renderer_new (GrdSessionRdp *session_rdp);
 
 GMainContext *grd_rdp_renderer_get_graphics_context (GrdRdpRenderer *renderer);
+
+GrdSessionRdp *grd_rdp_renderer_get_session (GrdRdpRenderer *renderer);
+
+GrdVkDevice *grd_rdp_renderer_get_vk_device (GrdRdpRenderer *renderer);
+
+GrdHwAccelVaapi *grd_rdp_renderer_get_hwaccel_vaapi (GrdRdpRenderer *renderer);
+
+GrdRdpSwEncoderCa *grd_rdp_renderer_get_encoder_ca (GrdRdpRenderer *renderer);
 
 void grd_rdp_renderer_update_output_suppression_state (GrdRdpRenderer *renderer,
                                                        gboolean        suppress_output);
 
 void grd_rdp_renderer_invoke_shutdown (GrdRdpRenderer *renderer);
 
-gboolean grd_rdp_renderer_start (GrdRdpRenderer            *renderer,
-                                 GrdHwAccelVulkan          *hwaccel_vulkan,
-                                 GrdRdpDvcGraphicsPipeline *graphics_pipeline,
-                                 rdpContext                *rdp_context);
+gboolean grd_rdp_renderer_start (GrdRdpRenderer *renderer);
 
 void grd_rdp_renderer_notify_new_desktop_layout (GrdRdpRenderer *renderer,
                                                  uint32_t        desktop_width,

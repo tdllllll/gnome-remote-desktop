@@ -28,7 +28,9 @@
 #include "grd-hwaccel-vulkan.h"
 #include "grd-rdp-dvc-graphics-pipeline.h"
 #include "grd-rdp-frame.h"
+#include "grd-rdp-private.h"
 #include "grd-rdp-render-context.h"
+#include "grd-rdp-server.h"
 #include "grd-rdp-surface.h"
 #include "grd-rdp-surface-renderer.h"
 #include "grd-rdp-sw-encoder-ca.h"
@@ -52,14 +54,10 @@ struct _GrdRdpRenderer
   gboolean in_shutdown;
 
   GrdSessionRdp *session_rdp;
-  GrdEglThread *egl_thread;
+  GrdVkPhysicalDevice *vk_physical_device;
   GrdVkDevice *vk_device;
-  GrdHwAccelNvidia *hwaccel_nvidia;
   GrdHwAccelVaapi *hwaccel_vaapi;
   GrdRdpSwEncoderCa *encoder_ca;
-
-  GrdRdpDvcGraphicsPipeline *graphics_pipeline;
-  rdpContext *rdp_context;
 
   GThread *graphics_thread;
   GMainContext *graphics_context;
@@ -102,6 +100,30 @@ GMainContext *
 grd_rdp_renderer_get_graphics_context (GrdRdpRenderer *renderer)
 {
   return renderer->graphics_context;
+}
+
+GrdSessionRdp *
+grd_rdp_renderer_get_session (GrdRdpRenderer *renderer)
+{
+  return renderer->session_rdp;
+}
+
+GrdVkDevice *
+grd_rdp_renderer_get_vk_device (GrdRdpRenderer *renderer)
+{
+  return renderer->vk_device;
+}
+
+GrdHwAccelVaapi *
+grd_rdp_renderer_get_hwaccel_vaapi (GrdRdpRenderer *renderer)
+{
+  return renderer->hwaccel_vaapi;
+}
+
+GrdRdpSwEncoderCa *
+grd_rdp_renderer_get_encoder_ca (GrdRdpRenderer *renderer)
+{
+  return renderer->encoder_ca;
 }
 
 static void
@@ -155,15 +177,18 @@ static gpointer
 graphics_thread_func (gpointer data)
 {
   GrdRdpRenderer *renderer = data;
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (renderer->session_rdp);
+  GrdHwAccelNvidia *hwaccel_nvidia =
+    grd_rdp_server_get_hwaccel_nvidia (rdp_server);
 
-  if (renderer->hwaccel_nvidia)
-    grd_hwaccel_nvidia_push_cuda_context (renderer->hwaccel_nvidia);
+  if (hwaccel_nvidia)
+    grd_hwaccel_nvidia_push_cuda_context (hwaccel_nvidia);
 
   while (!renderer->in_shutdown)
     g_main_context_iteration (renderer->graphics_context, TRUE);
 
-  if (renderer->hwaccel_nvidia)
-    grd_hwaccel_nvidia_pop_cuda_context (renderer->hwaccel_nvidia);
+  if (hwaccel_nvidia)
+    grd_hwaccel_nvidia_pop_cuda_context (hwaccel_nvidia);
 
   return NULL;
 }
@@ -172,9 +197,21 @@ static gboolean
 maybe_initialize_hardware_acceleration (GrdRdpRenderer   *renderer,
                                         GrdHwAccelVulkan *hwaccel_vulkan)
 {
+  GrdVkPhysicalDevice *vk_physical_device;
   g_autoptr (GError) error = NULL;
 
+  vk_physical_device =
+    grd_hwaccel_vulkan_acquire_physical_device (hwaccel_vulkan, &error);
+  if (!vk_physical_device)
+    {
+      g_message ("[HWAccel.Vulkan] Could not acquire Vulkan physical "
+                 "device: %s", error->message);
+      return TRUE;
+    }
+  renderer->vk_physical_device = vk_physical_device;
+
   renderer->vk_device = grd_hwaccel_vulkan_acquire_device (hwaccel_vulkan,
+                                                           vk_physical_device,
                                                            &error);
   if (!renderer->vk_device)
     {
@@ -195,15 +232,12 @@ maybe_initialize_hardware_acceleration (GrdRdpRenderer   *renderer,
 }
 
 gboolean
-grd_rdp_renderer_start (GrdRdpRenderer            *renderer,
-                        GrdHwAccelVulkan          *hwaccel_vulkan,
-                        GrdRdpDvcGraphicsPipeline *graphics_pipeline,
-                        rdpContext                *rdp_context)
+grd_rdp_renderer_start (GrdRdpRenderer *renderer)
 {
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (renderer->session_rdp);
+  GrdHwAccelVulkan *hwaccel_vulkan =
+    grd_rdp_server_get_hwaccel_vulkan (rdp_server);
   g_autoptr (GError) error = NULL;
-
-  renderer->graphics_pipeline = graphics_pipeline;
-  renderer->rdp_context = rdp_context;
 
   if (hwaccel_vulkan &&
       !maybe_initialize_hardware_acceleration (renderer, hwaccel_vulkan))
@@ -224,15 +258,22 @@ grd_rdp_renderer_start (GrdRdpRenderer            *renderer,
   return TRUE;
 }
 
+static GrdRdpDvcGraphicsPipeline *
+graphics_pipeline_from_renderer (GrdRdpRenderer *renderer)
+{
+  return grd_session_rdp_get_graphics_pipeline (renderer->session_rdp);
+}
+
 void
 grd_rdp_renderer_notify_new_desktop_layout (GrdRdpRenderer *renderer,
                                             uint32_t        desktop_width,
                                             uint32_t        desktop_height)
 {
-  rdpContext *rdp_context = renderer->rdp_context;
+  rdpContext *rdp_context =
+    grd_session_rdp_get_rdp_context (renderer->session_rdp);
   rdpSettings *rdp_settings = rdp_context->settings;
 
-  g_assert (renderer->graphics_pipeline);
+  g_assert (graphics_pipeline_from_renderer (renderer));
   renderer->pending_gfx_graphics_reset = TRUE;
 
   freerdp_settings_set_uint32 (rdp_settings, FreeRDP_DesktopWidth,
@@ -301,13 +342,11 @@ grd_rdp_renderer_try_acquire_surface (GrdRdpRenderer *renderer,
   GrdRdpSurface *rdp_surface;
   GrdRdpSurfaceRenderer *surface_renderer;
 
-  rdp_surface = grd_rdp_surface_new (renderer->hwaccel_nvidia);
+  rdp_surface = grd_rdp_surface_new (renderer);
   if (!rdp_surface)
     return NULL;
 
   surface_renderer = grd_rdp_surface_renderer_new (rdp_surface, renderer,
-                                                   renderer->session_rdp,
-                                                   renderer->vk_device,
                                                    refresh_rate);
   grd_rdp_surface_attach_surface_renderer (rdp_surface, surface_renderer);
 
@@ -364,7 +403,10 @@ clear_render_contexts (GrdRdpRenderer *renderer,
 static void
 maybe_reset_graphics (GrdRdpRenderer *renderer)
 {
-  rdpContext *rdp_context = renderer->rdp_context;
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline =
+    graphics_pipeline_from_renderer (renderer);
+  rdpContext *rdp_context =
+    grd_session_rdp_get_rdp_context (renderer->session_rdp);
   rdpSettings *rdp_settings = rdp_context->settings;
   uint32_t desktop_width =
     freerdp_settings_get_uint32 (rdp_settings, FreeRDP_DesktopWidth);
@@ -400,7 +442,7 @@ maybe_reset_graphics (GrdRdpRenderer *renderer)
         monitor_def->flags = MONITOR_PRIMARY;
     }
 
-  grd_rdp_dvc_graphics_pipeline_reset_graphics (renderer->graphics_pipeline,
+  grd_rdp_dvc_graphics_pipeline_reset_graphics (graphics_pipeline,
                                                 desktop_width, desktop_height,
                                                 monitor_defs, n_monitors);
   renderer->pending_gfx_graphics_reset = FALSE;
@@ -520,12 +562,7 @@ grd_rdp_renderer_try_acquire_render_context (GrdRdpRenderer            *renderer
   if (flags & GRD_RDP_ACQUIRE_CONTEXT_FLAG_RETAIN_OR_NULL)
     return NULL;
 
-  render_context = grd_rdp_render_context_new (renderer->graphics_pipeline,
-                                               rdp_surface,
-                                               renderer->egl_thread,
-                                               renderer->vk_device,
-                                               renderer->hwaccel_vaapi,
-                                               renderer->encoder_ca);
+  render_context = grd_rdp_render_context_new (renderer, rdp_surface);
   if (!render_context)
     {
       handle_graphics_subsystem_failure (renderer);
@@ -620,24 +657,21 @@ grd_rdp_renderer_render_frame (GrdRdpRenderer      *renderer,
                                GrdRdpRenderContext *render_context,
                                GrdRdpLegacyBuffer  *buffer)
 {
-  return grd_rdp_dvc_graphics_pipeline_refresh_gfx (renderer->graphics_pipeline,
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline =
+    graphics_pipeline_from_renderer (renderer);
+
+  return grd_rdp_dvc_graphics_pipeline_refresh_gfx (graphics_pipeline,
                                                     rdp_surface, render_context,
                                                     buffer);
 }
 
 GrdRdpRenderer *
-grd_rdp_renderer_new (GrdSessionRdp    *session_rdp,
-                      GrdHwAccelNvidia *hwaccel_nvidia)
+grd_rdp_renderer_new (GrdSessionRdp *session_rdp)
 {
-  GrdSession *session = GRD_SESSION (session_rdp);
-  GrdContext *context = grd_session_get_context (session);
-  GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
   GrdRdpRenderer *renderer;
 
   renderer = g_object_new (GRD_TYPE_RDP_RENDERER, NULL);
   renderer->session_rdp = session_rdp;
-  renderer->egl_thread = egl_thread;
-  renderer->hwaccel_nvidia = hwaccel_nvidia;
 
   return renderer;
 }
@@ -708,6 +742,7 @@ grd_rdp_renderer_dispose (GObject *object)
   g_clear_object (&renderer->encoder_ca);
   g_clear_object (&renderer->hwaccel_vaapi);
   g_clear_object (&renderer->vk_device);
+  g_clear_object (&renderer->vk_physical_device);
 
   G_OBJECT_CLASS (grd_rdp_renderer_parent_class)->dispose (object);
 }
@@ -972,13 +1007,15 @@ static void
 submit_rendered_frames (GrdRdpRenderer *renderer,
                         GList          *frames)
 {
+  GrdRdpDvcGraphicsPipeline *graphics_pipeline =
+    graphics_pipeline_from_renderer (renderer);
   GList *l;
 
   for (l = frames; l; l = l->next)
     {
       GrdRdpFrame *rdp_frame = l->data;
 
-      grd_rdp_dvc_graphics_pipeline_submit_frame (renderer->graphics_pipeline,
+      grd_rdp_dvc_graphics_pipeline_submit_frame (graphics_pipeline,
                                                   rdp_frame);
       grd_rdp_frame_notify_frame_submission (rdp_frame);
     }

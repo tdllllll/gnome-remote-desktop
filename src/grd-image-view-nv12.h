@@ -19,6 +19,8 @@
 
 #pragma once
 
+#include <vulkan/vulkan.h>
+
 #include "grd-image-view.h"
 #include "grd-types.h"
 
@@ -29,6 +31,13 @@ G_DECLARE_FINAL_TYPE (GrdImageViewNV12, grd_image_view_nv12,
 GrdImageViewNV12 *grd_image_view_nv12_new (GrdVkImage *vk_y_layer,
                                            GrdVkImage *vk_uv_layer);
 
-GrdVkImage *grd_image_view_nv12_get_y_layer (GrdImageViewNV12 *image_view_nv12);
+VkImageView grd_image_view_nv12_get_y_layer (GrdImageViewNV12 *image_view_nv12);
 
-GrdVkImage *grd_image_view_nv12_get_uv_layer (GrdImageViewNV12 *image_view_nv12);
+VkImageView grd_image_view_nv12_get_uv_layer (GrdImageViewNV12 *image_view_nv12);
+
+GList *grd_image_view_nv12_get_images (GrdImageViewNV12 *image_view_nv12);
+
+VkImageLayout grd_image_view_nv12_get_image_layout (GrdImageViewNV12 *image_view_nv12);
+
+void grd_image_view_nv12_set_image_layout (GrdImageViewNV12 *image_view_nv12,
+                                           VkImageLayout     vk_image_layout);

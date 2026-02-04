@@ -256,6 +256,55 @@ rdp_disable (GrdSettings  *settings,
 }
 
 static gboolean
+rdp_set_auth_methods (GrdSettings  *settings,
+                      int           argc,
+                      char        **argv,
+                      GError      **error)
+{
+  char *auth_methods_string = argv[0];
+  g_auto (GStrv) auth_method_strings = NULL;
+  char **auth_method;
+  GrdRdpAuthMethods auth_methods = 0;
+
+  auth_method_strings = g_strsplit (auth_methods_string, ",", -1);
+  for (auth_method = auth_method_strings; *auth_method; auth_method++)
+    {
+      if (g_strcmp0 (*auth_method, "credentials") == 0)
+        {
+          auth_methods |= GRD_RDP_AUTH_METHOD_CREDENTIALS;
+        }
+      else if (g_strcmp0 (*auth_method, "kerberos") == 0)
+        {
+          auth_methods |= GRD_RDP_AUTH_METHOD_KERBEROS;
+        }
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                       "Invalid auth method '%s'", *auth_method);
+          return FALSE;
+        }
+    }
+
+  if (!auth_methods)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "No auth method selected");
+      return FALSE;
+    }
+
+  if ((auth_methods & GRD_RDP_AUTH_METHOD_KERBEROS) &&
+      GRD_IS_SETTINGS_SYSTEM (settings))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Kerberos not supported in the system daemon");
+      return FALSE;
+    }
+
+  g_object_set (G_OBJECT (settings), "rdp-auth-methods", auth_methods, NULL);
+  return TRUE;
+}
+
+static gboolean
 rdp_set_tls_cert (GrdSettings  *settings,
                   int           argc,
                   char        **argv,
@@ -290,6 +339,32 @@ rdp_set_tls_key (GrdSettings  *settings,
     }
 
   g_object_set (G_OBJECT (settings), "rdp-server-key-path", argv[0], NULL);
+  return TRUE;
+}
+
+static gboolean
+rdp_set_kerberos_keytab (GrdSettings  *settings,
+                         int           argc,
+                         char        **argv,
+                         GError      **error)
+{
+  char *path = argv[0];
+
+  if (GRD_IS_SETTINGS_SYSTEM (settings))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Kerberos not supported in the system daemon");
+      return FALSE;
+    }
+
+  if (!g_path_is_absolute (path))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Path to certificate file not absolute");
+      return FALSE;
+    }
+
+  g_object_set (G_OBJECT (settings), "rdp-kerberos-keytab", argv[0], NULL);
   return TRUE;
 }
 
@@ -382,8 +457,10 @@ static const SubCommand rdp_subcommands[] = {
   { "set-port", rdp_set_port, 1 },
   { "enable", rdp_enable, 0 },
   { "disable", rdp_disable, 0 },
+  { "set-auth-methods", rdp_set_auth_methods, 1 },
   { "set-tls-cert", rdp_set_tls_cert, 1 },
   { "set-tls-key", rdp_set_tls_key, 1 },
+  { "set-kerberos-keytab", rdp_set_kerberos_keytab, 1 },
   { "set-credentials", rdp_set_credentials, 0 },
   { "set-credentials", rdp_set_credentials, 1 },
   { "set-credentials", rdp_set_credentials, 2 },
@@ -611,8 +688,12 @@ print_help (void)
       "    set-port                                     - Set port the server binds to\n"
       "    enable                                       - Enable the RDP backend\n"
       "    disable                                      - Disable the RDP backend\n"
+      "    set-auth-methods <list-of-methods>           - Set a comma separated list of\n"
+      "                                                   allowed authentication methods\n"
+      "                                                   (credentials, kerberos)\n"
       "    set-tls-cert <path-to-cert>                  - Set path to TLS certificate\n"
       "    set-tls-key <path-to-key>                    - Set path to TLS key\n"
+      "    set-kerberos-keytab <path-to-keytab>         - Set path to a Kerberos keytab\n"
       "    set-credentials [<username> [<password>]]    - Set username and password\n"
       "                                                   credentials\n"
       "    clear-credentials                            - Clear username and password\n"
@@ -718,14 +799,35 @@ status_to_string (gboolean enabled,
 }
 
 #ifdef HAVE_RDP
+
+static char *
+generate_auth_methods_string (GrdRdpAuthMethods auth_methods)
+{
+  g_autoptr (GStrvBuilder) builder = NULL;
+  g_auto (GStrv) auth_method_strings = NULL;
+
+  builder = g_strv_builder_new ();
+  if (auth_methods & GRD_RDP_AUTH_METHOD_CREDENTIALS)
+    g_strv_builder_add (builder, "credentials");
+  if (auth_methods & GRD_RDP_AUTH_METHOD_KERBEROS)
+    g_strv_builder_add (builder, "kerberos");
+
+  auth_method_strings = g_strv_builder_end (builder);
+
+  return g_strjoinv (", ", auth_method_strings);
+}
+
 static void
 print_rdp_status (GrdSettings *settings,
                   gboolean     use_colors,
                   gboolean     show_credentials)
 {
+  GrdRdpAuthMethods auth_methods = 0;
+  g_autofree char *auth_methods_string = NULL;
   g_autofree char *tls_fingerprint = NULL;
   g_autofree char *tls_cert = NULL;
   g_autofree char *tls_key = NULL;
+  g_autofree char *kerberos_keytab = NULL;
   g_autofree char *username = NULL;
   g_autofree char *password = NULL;
   g_autoptr (GError) error = NULL;
@@ -735,21 +837,27 @@ print_rdp_status (GrdSettings *settings,
   int port;
 
   g_object_get (G_OBJECT (settings),
+                "rdp-auth-methods", &auth_methods,
                 "rdp-server-fingerprint", &tls_fingerprint,
                 "rdp-server-cert-path", &tls_cert,
                 "rdp-server-key-path", &tls_key,
+                "rdp-kerberos-keytab", &kerberos_keytab,
                 "rdp-negotiate-port", &negotiate_port,
                 "rdp-view-only", &view_only,
                 "rdp-enabled", &enabled,
                 "rdp-port", &port,
                 NULL);
 
+  auth_methods_string = generate_auth_methods_string (auth_methods);
+
   printf ("RDP:\n");
   printf ("\tStatus: %s\n", status_to_string (enabled, use_colors));
   printf ("\tPort: %d\n", port);
+  printf ("\tAuthentication methods: %s\n", auth_methods_string);
   printf ("\tTLS certificate: %s\n", tls_cert);
   printf ("\tTLS fingerprint: %s\n", tls_fingerprint);
   printf ("\tTLS key: %s\n", tls_key);
+  printf ("\tKerberos keytab: %s\n", kerberos_keytab);
   if (!GRD_IS_SETTINGS_SYSTEM (settings) && !GRD_IS_SETTINGS_HEADLESS (settings))
      printf ("\tView-only: %s\n", view_only ? "yes" : "no");
   if (!GRD_IS_SETTINGS_SYSTEM (settings))

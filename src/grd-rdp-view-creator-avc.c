@@ -30,6 +30,7 @@
 #include "grd-vk-device.h"
 #include "grd-vk-image.h"
 #include "grd-vk-memory.h"
+#include "grd-vk-physical-device.h"
 #include "grd-vk-queue.h"
 #include "grd-vk-utils.h"
 
@@ -144,25 +145,21 @@ write_image_descriptor_sets (GrdRdpViewCreatorAVC *view_creator_avc,
                              GrdVkImage           *src_image_old)
 {
   VkDevice vk_device = grd_vk_device_get_device (view_creator_avc->device);
-  GrdVkImage *main_view_y = grd_image_view_nv12_get_y_layer (main_image_view);
-  GrdVkImage *main_view_uv = grd_image_view_nv12_get_uv_layer (main_image_view);
-  GrdVkImage *aux_view_y = grd_image_view_nv12_get_y_layer (aux_image_view);
-  GrdVkImage *aux_view_uv = grd_image_view_nv12_get_uv_layer (aux_image_view);
   VkWriteDescriptorSet write_descriptor_sets[6] = {};
   VkDescriptorImageInfo image_infos[6] = {};
 
   image_infos[0].sampler = VK_NULL_HANDLE;
-  image_infos[0].imageView = grd_vk_image_get_image_view (main_view_y);
+  image_infos[0].imageView = grd_image_view_nv12_get_y_layer (main_image_view);
   image_infos[0].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
   image_infos[1] = image_infos[0];
-  image_infos[1].imageView = grd_vk_image_get_image_view (main_view_uv);
+  image_infos[1].imageView = grd_image_view_nv12_get_uv_layer (main_image_view);
 
   image_infos[2] = image_infos[0];
-  image_infos[2].imageView = grd_vk_image_get_image_view (aux_view_y);
+  image_infos[2].imageView = grd_image_view_nv12_get_y_layer (aux_image_view);
 
   image_infos[3] = image_infos[0];
-  image_infos[3].imageView = grd_vk_image_get_image_view (aux_view_uv);
+  image_infos[3].imageView = grd_image_view_nv12_get_uv_layer (aux_image_view);
 
   image_infos[4].sampler = view_creator_avc->vk_src_new_sampler;
   image_infos[4].imageView = grd_vk_image_get_image_view (src_image_new);
@@ -258,20 +255,16 @@ maybe_record_init_layouts (GrdRdpViewCreatorAVC  *view_creator_avc,
                            GrdVkImage            *src_image_old,
                            GError               **error)
 {
-  GrdVkImage *main_view_y = grd_image_view_nv12_get_y_layer (main_image_view);
-  GrdVkImage *main_view_uv = grd_image_view_nv12_get_uv_layer (main_image_view);
-  GrdVkImage *aux_view_y = grd_image_view_nv12_get_y_layer (aux_image_view);
-  GrdVkImage *aux_view_uv = grd_image_view_nv12_get_uv_layer (aux_image_view);
   VkCommandBuffer command_buffer =
     view_creator_avc->command_buffers.init_layouts;
   VkCommandBufferBeginInfo begin_info = {};
   VkResult vk_result;
+  g_autoptr (GList) images = NULL;
+  GList *l;
 
   view_creator_avc->pending_layout_transition =
-    grd_vk_image_get_image_layout (main_view_y) != VK_IMAGE_LAYOUT_GENERAL ||
-    grd_vk_image_get_image_layout (main_view_uv) != VK_IMAGE_LAYOUT_GENERAL ||
-    grd_vk_image_get_image_layout (aux_view_y) != VK_IMAGE_LAYOUT_GENERAL ||
-    grd_vk_image_get_image_layout (aux_view_uv) != VK_IMAGE_LAYOUT_GENERAL ||
+    grd_image_view_nv12_get_image_layout (main_image_view) != VK_IMAGE_LAYOUT_GENERAL ||
+    grd_image_view_nv12_get_image_layout (aux_image_view) != VK_IMAGE_LAYOUT_GENERAL ||
     grd_vk_image_get_image_layout (src_image_new) != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ||
     (src_image_old &&
      grd_vk_image_get_image_layout (src_image_old) != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -289,18 +282,19 @@ maybe_record_init_layouts (GrdRdpViewCreatorAVC  *view_creator_avc,
       return FALSE;
     }
 
-  maybe_init_image_layout (view_creator_avc, command_buffer, main_view_y,
-                           VK_IMAGE_LAYOUT_GENERAL,
-                           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-  maybe_init_image_layout (view_creator_avc, command_buffer, main_view_uv,
-                           VK_IMAGE_LAYOUT_GENERAL,
-                           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-  maybe_init_image_layout (view_creator_avc, command_buffer, aux_view_y,
-                           VK_IMAGE_LAYOUT_GENERAL,
-                           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-  maybe_init_image_layout (view_creator_avc, command_buffer, aux_view_uv,
-                           VK_IMAGE_LAYOUT_GENERAL,
-                           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+  images = grd_image_view_nv12_get_images (main_image_view);
+  images = g_list_concat (images,
+                          grd_image_view_nv12_get_images (aux_image_view));
+
+  for (l = images; l; l = l->next)
+    {
+      GrdVkImage *image = l->data;
+
+      maybe_init_image_layout (view_creator_avc, command_buffer, image,
+                               VK_IMAGE_LAYOUT_GENERAL,
+                               VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    }
+
   maybe_init_image_layout (view_creator_avc, command_buffer, src_image_new,
                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                            VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
@@ -446,15 +440,10 @@ update_image_layout_states (GrdImageViewNV12 *main_image_view,
                             GrdVkImage       *src_image_new,
                             GrdVkImage       *src_image_old)
 {
-  GrdVkImage *main_view_y = grd_image_view_nv12_get_y_layer (main_image_view);
-  GrdVkImage *main_view_uv = grd_image_view_nv12_get_uv_layer (main_image_view);
-  GrdVkImage *aux_view_y = grd_image_view_nv12_get_y_layer (aux_image_view);
-  GrdVkImage *aux_view_uv = grd_image_view_nv12_get_uv_layer (aux_image_view);
-
-  grd_vk_image_set_image_layout (main_view_y, VK_IMAGE_LAYOUT_GENERAL);
-  grd_vk_image_set_image_layout (main_view_uv, VK_IMAGE_LAYOUT_GENERAL);
-  grd_vk_image_set_image_layout (aux_view_y, VK_IMAGE_LAYOUT_GENERAL);
-  grd_vk_image_set_image_layout (aux_view_uv, VK_IMAGE_LAYOUT_GENERAL);
+  grd_image_view_nv12_set_image_layout (main_image_view,
+                                        VK_IMAGE_LAYOUT_GENERAL);
+  grd_image_view_nv12_set_image_layout (aux_image_view,
+                                        VK_IMAGE_LAYOUT_GENERAL);
 
   grd_vk_image_set_image_layout (src_image_new,
                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -1472,8 +1461,10 @@ grd_rdp_view_creator_avc_new (GrdVkDevice  *device,
                               GError      **error)
 {
   g_autoptr (GrdRdpViewCreatorAVC) view_creator_avc = NULL;
+  GrdVkPhysicalDevice *physical_device =
+    grd_vk_device_get_physical_device (device);
   GrdVkDeviceFeatures device_features =
-    grd_vk_device_get_device_features (device);
+    grd_vk_physical_device_get_device_features (physical_device);
 
   view_creator_avc = g_object_new (GRD_TYPE_RDP_VIEW_CREATOR_AVC, NULL);
   view_creator_avc->device = device;

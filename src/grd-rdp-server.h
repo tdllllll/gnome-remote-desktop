@@ -32,6 +32,10 @@ G_DECLARE_FINAL_TYPE (GrdRdpServer,
 
 GrdContext *grd_rdp_server_get_context (GrdRdpServer *rdp_server);
 
+GrdHwAccelNvidia *grd_rdp_server_get_hwaccel_nvidia (GrdRdpServer *rdp_server);
+
+GrdHwAccelVulkan *grd_rdp_server_get_hwaccel_vulkan (GrdRdpServer *rdp_server);
+
 gboolean grd_rdp_server_start (GrdRdpServer  *rdp_server,
                                GError       **error);
 
@@ -41,3 +45,5 @@ GrdRdpServer *grd_rdp_server_new (GrdContext *context);
 
 void grd_rdp_server_notify_incoming (GSocketService    *service,
                                      GSocketConnection *connection);
+
+void grd_rdp_server_stop_sessions (GrdRdpServer *rdp_server);

@@ -22,6 +22,7 @@
 #include <gio/gio.h>
 #include <glib-object.h>
 
+#include "grd-enums.h"
 #include "grd-session.h"
 #include "grd-types.h"
 
@@ -46,16 +47,18 @@ typedef enum _GrdRdpChannel
   GRD_RDP_CHANNEL_NONE,
   GRD_RDP_CHANNEL_AUDIO_INPUT,
   GRD_RDP_CHANNEL_AUDIO_PLAYBACK,
+  GRD_RDP_CHANNEL_CAMERA,
+  GRD_RDP_CHANNEL_CAMERA_ENUMERATOR,
   GRD_RDP_CHANNEL_DISPLAY_CONTROL,
   GRD_RDP_CHANNEL_GRAPHICS_PIPELINE,
   GRD_RDP_CHANNEL_INPUT,
   GRD_RDP_CHANNEL_TELEMETRY,
 } GrdRdpChannel;
 
+typedef struct rdp_context rdpContext;
+
 GrdSessionRdp *grd_session_rdp_new (GrdRdpServer      *rdp_server,
-                                    GSocketConnection *connection,
-                                    GrdHwAccelVulkan  *hwaccel_vulkan,
-                                    GrdHwAccelNvidia  *hwaccel_nvidia);
+                                    GSocketConnection *connection);
 
 GrdRdpSessionMetrics *grd_session_rdp_get_session_metrics (GrdSessionRdp *session_rdp);
 
@@ -78,3 +81,15 @@ gboolean grd_session_rdp_send_server_redirection (GrdSessionRdp *session_rdp,
                                                   const char    *username,
                                                   const char    *password,
                                                   const char    *certificate);
+
+GrdRdpServer *grd_session_rdp_get_server (GrdSessionRdp *session_rdp);
+
+GrdRdpRenderer *grd_session_rdp_get_renderer (GrdSessionRdp *session_rdp);
+
+GrdRdpCursorRenderer *grd_session_rdp_get_cursor_renderer (GrdSessionRdp *session_rdp);
+
+rdpContext *grd_session_rdp_get_rdp_context (GrdSessionRdp *session_rdp);
+
+GrdRdpDvcGraphicsPipeline *grd_session_rdp_get_graphics_pipeline (GrdSessionRdp *session_rdp);
+
+GrdRdpScreenShareMode grd_session_rdp_get_screen_share_mode (GrdSessionRdp *session_rdp);

@@ -26,6 +26,7 @@
 #include <pipewire/pipewire.h>
 #include <spa/param/props.h>
 #include <spa/param/format-utils.h>
+#include <spa/param/tag-utils.h>
 #include <spa/param/video/format-utils.h>
 
 #include "grd-context.h"
@@ -37,13 +38,16 @@
 #include "grd-rdp-damage-detector.h"
 #include "grd-rdp-legacy-buffer.h"
 #include "grd-rdp-pw-buffer.h"
+#include "grd-rdp-renderer.h"
+#include "grd-rdp-server.h"
 #include "grd-rdp-session-metrics.h"
 #include "grd-rdp-surface.h"
 #include "grd-rdp-surface-renderer.h"
 #include "grd-utils.h"
+#include "grd-vk-device.h"
 
 #define DEFAULT_BUFFER_POOL_SIZE 5
-#define MAX_FORMAT_PARAMS 2
+#define MAX_PW_PARAMS 3
 
 enum
 {
@@ -94,8 +98,6 @@ struct _GrdRdpPipeWireStream
   GObject parent;
 
   GrdSessionRdp *session_rdp;
-  GrdRdpCursorRenderer *cursor_renderer;
-  GrdHwAccelVulkan *hwaccel_vulkan;
   GrdRdpSurface *rdp_surface;
   GrdEglThreadSlot egl_slot;
 
@@ -262,7 +264,13 @@ get_modifiers_for_format (GrdRdpPipeWireStream  *stream,
                           int                   *out_n_modifiers,
                           uint64_t             **out_modifiers)
 {
-  GrdHwAccelVulkan *hwaccel_vulkan = stream->hwaccel_vulkan;
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (stream->session_rdp);
+  GrdHwAccelVulkan *hwaccel_vulkan =
+    grd_rdp_server_get_hwaccel_vulkan (rdp_server);
+  GrdRdpRenderer *renderer = grd_session_rdp_get_renderer (stream->session_rdp);
+  GrdVkDevice *vk_device = grd_rdp_renderer_get_vk_device (renderer);
+  GrdVkPhysicalDevice *vk_physical_device =
+    grd_vk_device_get_physical_device (vk_device);
   GrdSession *session = GRD_SESSION (stream->session_rdp);
   GrdContext *context = grd_session_get_context (session);
   GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
@@ -272,6 +280,7 @@ get_modifiers_for_format (GrdRdpPipeWireStream  *stream,
   if (hwaccel_vulkan)
     {
       return grd_hwaccel_vulkan_get_modifiers_for_format (hwaccel_vulkan,
+                                                          vk_physical_device,
                                                           drm_format,
                                                           out_n_modifiers,
                                                           out_modifiers);
@@ -291,6 +300,9 @@ add_format_params (GrdRdpPipeWireStream        *stream,
 {
   GrdSession *session = GRD_SESSION (stream->session_rdp);
   GrdContext *context = grd_session_get_context (session);
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (stream->session_rdp);
+  GrdHwAccelNvidia *hwaccel_nvidia =
+    grd_rdp_server_get_hwaccel_nvidia (rdp_server);
   GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
   GrdRdpSurfaceRenderer *surface_renderer =
     grd_rdp_surface_get_surface_renderer (stream->rdp_surface);
@@ -309,7 +321,7 @@ add_format_params (GrdRdpPipeWireStream        *stream,
   add_common_format_params (pod_builder, spa_format, virtual_monitor,
                             refresh_rate);
 
-  if (egl_thread && !stream->rdp_surface->hwaccel_nvidia)
+  if (egl_thread && !hwaccel_nvidia)
     {
       uint32_t drm_format;
       int n_modifiers;
@@ -359,13 +371,43 @@ add_format_params (GrdRdpPipeWireStream        *stream,
   return n_params;
 }
 
+static uint32_t
+add_tag_params (GrdRdpPipeWireStream        *stream,
+                const GrdRdpVirtualMonitor  *virtual_monitor,
+                struct spa_pod_builder      *pod_builder,
+                const struct spa_pod       **params,
+                uint32_t                     n_available_params)
+{
+  struct spa_pod_frame tag_frame;
+  struct spa_dict_item items[1];
+  char scale_string[G_ASCII_DTOSTR_BUF_SIZE];
+  uint32_t n_params = 0;
+  double scale;
+
+  g_assert (n_available_params >= 1);
+
+  spa_tag_build_start (pod_builder, &tag_frame,
+                       SPA_PARAM_Tag, SPA_DIRECTION_INPUT);
+
+  scale = virtual_monitor->scale ? virtual_monitor->scale / 100.0 : 1.0;
+  g_ascii_dtostr (scale_string, G_ASCII_DTOSTR_BUF_SIZE, scale);
+  items[0] = SPA_DICT_ITEM_INIT ("org.gnome.preferred-scale", scale_string);
+
+  spa_tag_build_add_dict (pod_builder,
+                          &SPA_DICT_INIT (items, G_N_ELEMENTS (items)));
+
+  params[n_params++] = spa_tag_build_end (pod_builder, &tag_frame);
+
+  return n_params;
+}
+
 void
 grd_rdp_pipewire_stream_resize (GrdRdpPipeWireStream *stream,
                                 GrdRdpVirtualMonitor *virtual_monitor)
 {
   uint8_t params_buffer[1024];
   struct spa_pod_builder pod_builder;
-  const struct spa_pod *params[MAX_FORMAT_PARAMS] = {};
+  const struct spa_pod *params[MAX_PW_PARAMS] = {};
   uint32_t n_params = 0;
 
   stream->pending_resize = TRUE;
@@ -373,7 +415,12 @@ grd_rdp_pipewire_stream_resize (GrdRdpPipeWireStream *stream,
   pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
 
   n_params += add_format_params (stream, virtual_monitor, &pod_builder,
-                                 params, MAX_FORMAT_PARAMS);
+                                 &params[n_params], MAX_PW_PARAMS - n_params);
+  if (virtual_monitor)
+    {
+      n_params += add_tag_params (stream, virtual_monitor, &pod_builder,
+                                  &params[n_params], MAX_PW_PARAMS - n_params);
+    }
 
   g_assert (n_params > 0);
   pw_stream_update_params (stream->pipewire_stream, params, n_params);
@@ -441,6 +488,9 @@ on_stream_param_changed (void                 *user_data,
   GrdSession *session = GRD_SESSION (stream->session_rdp);
   GrdContext *context = grd_session_get_context (session);
   GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (stream->session_rdp);
+  GrdHwAccelNvidia *hwaccel_nvidia =
+    grd_rdp_server_get_hwaccel_nvidia (rdp_server);
   uint32_t width;
   uint32_t height;
   uint32_t stride;
@@ -482,7 +532,7 @@ on_stream_param_changed (void                 *user_data,
   pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
 
   allowed_buffer_types = 1 << SPA_DATA_MemFd;
-  if (egl_thread && !stream->rdp_surface->hwaccel_nvidia)
+  if (egl_thread && !hwaccel_nvidia)
     allowed_buffer_types |= 1 << SPA_DATA_DmaBuf;
 
   params[0] = spa_pod_builder_add_object (
@@ -531,7 +581,6 @@ on_stream_add_buffer (void             *user_data,
   GrdRdpPwBuffer *rdp_pw_buffer;
   g_autoptr (GError) error = NULL;
   uint32_t drm_format;
-  int bpp;
 
   if (stream->ignore_new_buffers)
     return;
@@ -545,8 +594,7 @@ on_stream_add_buffer (void             *user_data,
       return;
     }
 
-  grd_get_spa_format_details (stream->spa_format.format,
-                              &drm_format, &bpp);
+  grd_get_spa_format_details (stream->spa_format.format, &drm_format, NULL);
 
   surface_renderer = grd_rdp_surface_get_surface_renderer (stream->rdp_surface);
   if (!grd_rdp_surface_renderer_register_pw_buffer (surface_renderer,
@@ -633,7 +681,10 @@ process_mouse_cursor_data (GrdRdpPipeWireStream *stream,
 
   if (cursor_update)
     {
-      grd_rdp_cursor_renderer_submit_cursor_update (stream->cursor_renderer,
+      GrdRdpCursorRenderer *cursor_renderer =
+        grd_session_rdp_get_cursor_renderer (stream->session_rdp);
+
+      grd_rdp_cursor_renderer_submit_cursor_update (cursor_renderer,
                                                     cursor_update);
     }
 }
@@ -754,6 +805,9 @@ process_frame_data (GrdRdpPipeWireStream *stream,
   GrdSession *session = GRD_SESSION (stream->session_rdp);
   GrdContext *context = grd_session_get_context (session);
   GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (stream->session_rdp);
+  GrdHwAccelNvidia *hwaccel_nvidia =
+    grd_rdp_server_get_hwaccel_nvidia (rdp_server);
   struct spa_buffer *buffer = pw_buffer->buffer;
   GrdRdpPwBuffer *rdp_pw_buffer = NULL;
   g_autoptr (GrdRdpFrame) frame = NULL;
@@ -770,7 +824,7 @@ process_frame_data (GrdRdpPipeWireStream *stream,
   uint32_t pbo;
   uint8_t *data_to_upload;
 
-  g_assert (stream->rdp_surface->hwaccel_nvidia);
+  g_assert (hwaccel_nvidia);
   g_assert (buffer->datas[0].type == SPA_DATA_MemFd);
   g_assert (buffer->datas[0].chunk->size > 0);
 
@@ -872,6 +926,9 @@ static void
 on_stream_process (void *user_data)
 {
   GrdRdpPipeWireStream *stream = GRD_RDP_PIPEWIRE_STREAM (user_data);
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (stream->session_rdp);
+  GrdHwAccelNvidia *hwaccel_nvidia =
+    grd_rdp_server_get_hwaccel_nvidia (rdp_server);
   g_autoptr (GMutexLocker) locker = NULL;
   struct pw_buffer *last_pointer_buffer = NULL;
   struct pw_buffer *last_frame_buffer = NULL;
@@ -930,7 +987,7 @@ on_stream_process (void *user_data)
   if (!last_frame_buffer)
     return;
 
-  if (stream->rdp_surface->hwaccel_nvidia)
+  if (hwaccel_nvidia)
     process_frame_data (stream, last_frame_buffer);
   else
     submit_framebuffer (stream, last_frame_buffer);
@@ -953,7 +1010,7 @@ connect_to_stream (GrdRdpPipeWireStream        *stream,
   struct pw_stream *pipewire_stream;
   uint8_t params_buffer[1024];
   struct spa_pod_builder pod_builder;
-  const struct spa_pod *params[MAX_FORMAT_PARAMS] = {};
+  const struct spa_pod *params[MAX_PW_PARAMS] = {};
   uint32_t n_params = 0;
   int ret;
 
@@ -964,7 +1021,12 @@ connect_to_stream (GrdRdpPipeWireStream        *stream,
   pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
 
   n_params += add_format_params (stream, virtual_monitor, &pod_builder,
-                                 params, MAX_FORMAT_PARAMS);
+                                 &params[n_params], MAX_PW_PARAMS - n_params);
+  if (virtual_monitor)
+    {
+      n_params += add_tag_params (stream, virtual_monitor, &pod_builder,
+                                  &params[n_params], MAX_PW_PARAMS - n_params);
+    }
 
   stream->pipewire_stream = pipewire_stream;
 
@@ -1031,9 +1093,6 @@ static const struct pw_registry_events registry_events =
 
 GrdRdpPipeWireStream *
 grd_rdp_pipewire_stream_new (GrdSessionRdp               *session_rdp,
-                             GrdRdpCursorRenderer        *cursor_renderer,
-                             GrdHwAccelVulkan            *hwaccel_vulkan,
-                             GrdHwAccelNvidia            *hwaccel_nvidia,
                              GrdRdpSurface               *rdp_surface,
                              const GrdRdpVirtualMonitor  *virtual_monitor,
                              uint32_t                     src_node_id,
@@ -1042,19 +1101,18 @@ grd_rdp_pipewire_stream_new (GrdSessionRdp               *session_rdp,
   GrdSession *session = GRD_SESSION (session_rdp);
   GrdContext *context = grd_session_get_context (session);
   GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
+  GrdRdpServer *rdp_server = grd_session_rdp_get_server (session_rdp);
+  GrdHwAccelNvidia *hwaccel_nvidia =
+    grd_rdp_server_get_hwaccel_nvidia (rdp_server);
   g_autoptr (GrdRdpPipeWireStream) stream = NULL;
   GrdPipeWireSource *pipewire_source;
 
   stream = g_object_new (GRD_TYPE_RDP_PIPEWIRE_STREAM, NULL);
   stream->session_rdp = session_rdp;
-  stream->cursor_renderer = cursor_renderer;
-  stream->hwaccel_vulkan = hwaccel_vulkan;
   stream->rdp_surface = rdp_surface;
   stream->src_node_id = src_node_id;
 
-  stream->buffer_pool = grd_rdp_buffer_pool_new (egl_thread,
-                                                 hwaccel_nvidia,
-                                                 rdp_surface->cuda_stream,
+  stream->buffer_pool = grd_rdp_buffer_pool_new (rdp_surface,
                                                  DEFAULT_BUFFER_POOL_SIZE);
 
   if (egl_thread && !hwaccel_nvidia)
