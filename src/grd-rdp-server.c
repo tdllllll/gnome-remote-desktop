@@ -32,10 +32,12 @@
 #include "grd-hwaccel-vulkan.h"
 #include "grd-rdp-routing-token.h"
 #include "grd-session-rdp.h"
+#include "grd-throttler.h"
 #include "grd-utils.h"
 
 #define RDP_SERVER_N_BINDING_ATTEMPTS 10
 #define RDP_SERVER_BINDING_ATTEMPT_INTERVAL_MS 500
+#define RDP_SERVER_SOCKET_BACKLOG_COUNT 5
 
 enum
 {
@@ -59,6 +61,8 @@ struct _GrdRdpServer
 {
   GSocketService parent;
 
+  GrdThrottler *throttler;
+
   GList *sessions;
 
   GList *stopped_sessions;
@@ -80,6 +84,18 @@ GrdContext *
 grd_rdp_server_get_context (GrdRdpServer *rdp_server)
 {
   return rdp_server->context;
+}
+
+GrdHwAccelNvidia *
+grd_rdp_server_get_hwaccel_nvidia (GrdRdpServer *rdp_server)
+{
+  return rdp_server->hwaccel_nvidia;
+}
+
+GrdHwAccelVulkan *
+grd_rdp_server_get_hwaccel_vulkan (GrdRdpServer *rdp_server)
+{
+  return rdp_server->hwaccel_vulkan;
 }
 
 GrdRdpServer *
@@ -147,10 +163,35 @@ on_session_stopped (GrdSession   *session,
 }
 
 static void
+maybe_stop_session (GrdSession *session,
+                    GrdSession *session_to_ignore)
+{
+  if (session == session_to_ignore)
+    return;
+
+  grd_session_stop (session);
+}
+
+static void
 on_session_post_connect (GrdSessionRdp *session_rdp,
                          GrdRdpServer  *rdp_server)
 {
+  GrdDBusRemoteDesktopRdpServer *rdp_server_iface =
+    grd_context_get_rdp_server_interface (rdp_server->context);
+  GrdRuntimeMode runtime_mode =
+    grd_context_get_runtime_mode (rdp_server->context);
+
   g_signal_emit (rdp_server, signals[INCOMING_NEW_CONNECTION], 0, session_rdp);
+
+  grd_dbus_remote_desktop_rdp_server_emit_new_connection (rdp_server_iface);
+
+  if (runtime_mode == GRD_RUNTIME_MODE_HANDOVER ||
+      runtime_mode == GRD_RUNTIME_MODE_HEADLESS)
+    {
+      g_list_foreach (rdp_server->sessions,
+                      (GFunc) maybe_stop_session,
+                      GRD_SESSION (session_rdp));
+    }
 }
 
 static void
@@ -188,9 +229,7 @@ on_routing_token_peeked (GObject      *source_object,
     }
   else
     {
-      if (!(session_rdp = grd_session_rdp_new (rdp_server, connection,
-                                               rdp_server->hwaccel_vulkan,
-                                               rdp_server->hwaccel_nvidia)))
+      if (!(session_rdp = grd_session_rdp_new (rdp_server, connection)))
         return;
 
       rdp_server->sessions = g_list_append (rdp_server->sessions, session_rdp);
@@ -205,18 +244,17 @@ on_routing_token_peeked (GObject      *source_object,
     }
 }
 
-static gboolean
-on_incoming_as_system_headless (GSocketService    *service,
-                                GSocketConnection *connection)
+static void
+allow_connection_peek_cb (GrdThrottler      *throttler,
+                          GSocketConnection *connection,
+                          gpointer           user_data)
 {
-  GrdRdpServer *rdp_server = GRD_RDP_SERVER (service);
+  GrdRdpServer *rdp_server = GRD_RDP_SERVER (user_data);
 
   grd_routing_token_peek_async (rdp_server,
                                 connection,
                                 rdp_server->cancellable,
                                 on_routing_token_peeked);
-
-  return TRUE;
 }
 
 static gboolean
@@ -224,14 +262,22 @@ on_incoming (GSocketService    *service,
              GSocketConnection *connection)
 {
   GrdRdpServer *rdp_server = GRD_RDP_SERVER (service);
+
+  grd_throttler_handle_connection (rdp_server->throttler,
+                                   connection);
+  return TRUE;
+}
+
+static void
+accept_connection (GrdRdpServer      *rdp_server,
+                   GSocketConnection *connection)
+{
   GrdSessionRdp *session_rdp;
 
-  g_debug ("New incoming RDP connection");
+  g_debug ("Creating new RDP session");
 
-  if (!(session_rdp = grd_session_rdp_new (rdp_server, connection,
-                                           rdp_server->hwaccel_vulkan,
-                                           rdp_server->hwaccel_nvidia)))
-    return TRUE;
+  if (!(session_rdp = grd_session_rdp_new (rdp_server, connection)))
+    return;
 
   rdp_server->sessions = g_list_append (rdp_server->sessions, session_rdp);
 
@@ -242,15 +288,46 @@ on_incoming (GSocketService    *service,
   g_signal_connect (session_rdp, "post-connected",
                     G_CALLBACK (on_session_post_connect),
                     rdp_server);
+}
 
-  return TRUE;
+static void
+allow_connection_accept_cb (GrdThrottler      *throttler,
+                            GSocketConnection *connection,
+                            gpointer           user_data)
+{
+  GrdRdpServer *rdp_server = GRD_RDP_SERVER (user_data);
+
+  accept_connection (rdp_server, connection);
 }
 
 void
 grd_rdp_server_notify_incoming (GSocketService    *service,
                                 GSocketConnection *connection)
 {
-  on_incoming (service, connection);
+  GrdRdpServer *rdp_server = GRD_RDP_SERVER (service);
+  GrdRuntimeMode runtime_mode = grd_context_get_runtime_mode (rdp_server->context);
+
+  switch (runtime_mode)
+    {
+    case GRD_RUNTIME_MODE_HANDOVER:
+      accept_connection (rdp_server, connection);
+      break;
+    case GRD_RUNTIME_MODE_SYSTEM:
+    case GRD_RUNTIME_MODE_SCREEN_SHARE:
+    case GRD_RUNTIME_MODE_HEADLESS:
+      g_assert_not_reached ();
+    }
+}
+
+void
+grd_rdp_server_stop_sessions (GrdRdpServer *rdp_server)
+{
+  while (rdp_server->sessions)
+    {
+      GrdSession *session = rdp_server->sessions->data;
+
+      grd_session_stop (session);
+    }
 }
 
 static gboolean
@@ -311,6 +388,9 @@ bind_socket (GrdRdpServer  *rdp_server,
   int rdp_port = 0;
   uint16_t selected_rdp_port = 0;
   gboolean negotiate_port;
+
+  g_socket_listener_set_backlog (G_SOCKET_LISTENER (rdp_server),
+                                 RDP_SERVER_SOCKET_BACKLOG_COUNT);
 
   g_object_get (G_OBJECT (settings),
                 "rdp-port", &rdp_port,
@@ -374,16 +454,13 @@ grd_rdp_server_start (GrdRdpServer  *rdp_server,
 
   switch (runtime_mode)
     {
+    case GRD_RUNTIME_MODE_SYSTEM:
+      g_assert (!rdp_server->cancellable);
+      rdp_server->cancellable = g_cancellable_new ();
+      G_GNUC_FALLTHROUGH;
     case GRD_RUNTIME_MODE_SCREEN_SHARE:
     case GRD_RUNTIME_MODE_HEADLESS:
       g_signal_connect (rdp_server, "incoming", G_CALLBACK (on_incoming), NULL);
-      break;
-    case GRD_RUNTIME_MODE_SYSTEM:
-      g_signal_connect (rdp_server, "incoming",
-                        G_CALLBACK (on_incoming_as_system_headless), NULL);
-
-      g_assert (!rdp_server->cancellable);
-      rdp_server->cancellable = g_cancellable_new ();
       break;
     case GRD_RUNTIME_MODE_HANDOVER:
       break;
@@ -415,6 +492,8 @@ grd_rdp_server_stop (GrdRdpServer *rdp_server)
 
   g_clear_handle_id (&rdp_server->cleanup_sessions_idle_id, g_source_remove);
   grd_rdp_server_cleanup_stopped_sessions (rdp_server);
+
+  g_clear_object (&rdp_server->throttler);
 
   if (rdp_server->cancellable)
     {
@@ -475,6 +554,7 @@ grd_rdp_server_dispose (GObject *object)
   g_assert (!rdp_server->binding_timeout_source_id);
   g_assert (!rdp_server->cleanup_sessions_idle_id);
   g_assert (!rdp_server->stopped_sessions);
+  g_assert (!rdp_server->throttler);
 
   g_assert (!rdp_server->hwaccel_nvidia);
   g_assert (!rdp_server->hwaccel_vulkan);
@@ -485,12 +565,32 @@ grd_rdp_server_dispose (GObject *object)
 static void
 grd_rdp_server_constructed (GObject *object)
 {
-  G_OBJECT_CLASS (grd_rdp_server_parent_class)->constructed (object);
-}
+  GrdRdpServer *rdp_server = GRD_RDP_SERVER (object);
+  GrdRuntimeMode runtime_mode =
+    grd_context_get_runtime_mode (rdp_server->context);
+  GrdThrottlerAllowCallback allow_callback = NULL;
 
-static void
-grd_rdp_server_init (GrdRdpServer *rdp_server)
-{
+  switch (runtime_mode)
+    {
+    case GRD_RUNTIME_MODE_SCREEN_SHARE:
+    case GRD_RUNTIME_MODE_HEADLESS:
+      allow_callback = allow_connection_accept_cb;
+      break;
+    case GRD_RUNTIME_MODE_SYSTEM:
+      allow_callback = allow_connection_peek_cb;
+      break;
+    case GRD_RUNTIME_MODE_HANDOVER:
+      break;
+    }
+
+  if (allow_callback)
+    {
+      rdp_server->throttler =
+        grd_throttler_new (grd_throttler_limits_new (rdp_server->context),
+                           allow_callback,
+                           rdp_server);
+    }
+
   rdp_server->pending_binding_attempts = RDP_SERVER_N_BINDING_ATTEMPTS;
 
   winpr_InitializeSSL (WINPR_SSL_INIT_DEFAULT);
@@ -500,6 +600,13 @@ grd_rdp_server_init (GrdRdpServer *rdp_server)
    * Run the primitives benchmark here to save time, when initializing a session
    */
   primitives_get ();
+
+  G_OBJECT_CLASS (grd_rdp_server_parent_class)->constructed (object);
+}
+
+static void
+grd_rdp_server_init (GrdRdpServer *rdp_server)
+{
 }
 
 static void

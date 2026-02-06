@@ -40,6 +40,7 @@
 #include "grd-settings-headless.h"
 #include "grd-settings-system.h"
 #include "grd-settings-user.h"
+#include "grd-types.h"
 #include "grd-vnc-server.h"
 
 #ifdef HAVE_LIBSYSTEMD
@@ -48,6 +49,8 @@
 #endif /* HAVE_LIBSYSTEMD */
 
 #define RDP_SERVER_RESTART_DELAY_MS 3000
+
+#define DEFAULT_MAX_PARALLEL_CONNECTIONS 10
 
 enum
 {
@@ -84,6 +87,8 @@ typedef struct _GrdDaemonPrivate
 #ifdef HAVE_RDP
   GrdRdpServer *rdp_server;
   unsigned int restart_rdp_server_source_id;
+  GrdDBusRemoteDesktopRdpServer *other_rdp_server_iface;
+  unsigned int other_rdp_server_watch_name_id;
 #endif
 #ifdef HAVE_VNC
   GrdVncServer *vnc_server;
@@ -92,9 +97,29 @@ typedef struct _GrdDaemonPrivate
 
 G_DEFINE_TYPE_WITH_PRIVATE (GrdDaemon, grd_daemon, G_TYPE_APPLICATION)
 
+#define QUOTE1(a) #a
+#define QUOTE(a) QUOTE1(a)
+
 #ifdef HAVE_RDP
 static void maybe_start_rdp_server (GrdDaemon *daemon);
 #endif
+
+static const GDBusErrorEntry grd_dbus_error_entries[] =
+{
+  { GRD_DBUS_ERROR_NO_HANDOVER, "org.gnome.RemoteDesktop.Error.NoHandover" },
+};
+
+GQuark
+grd_dbus_error_quark (void)
+{
+  static gsize quark = 0;
+
+  g_dbus_error_register_error_domain ("grd-dbus-error-quark",
+                                      &quark,
+                                      grd_dbus_error_entries,
+                                      G_N_ELEMENTS (grd_dbus_error_entries));
+  return (GQuark) quark;
+}
 
 GCancellable *
 grd_daemon_get_cancellable (GrdDaemon *daemon)
@@ -194,6 +219,12 @@ export_rdp_server_interface (GrdDaemon *daemon)
   g_object_bind_property (settings, "rdp-server-key-path",
                           rdp_server_interface, "tls-key",
                           G_BINDING_SYNC_CREATE);
+  g_object_bind_property (settings, "rdp-auth-methods",
+                          rdp_server_interface, "auth-methods",
+                          G_BINDING_SYNC_CREATE);
+  g_object_bind_property (settings, "rdp-kerberos-keytab",
+                          rdp_server_interface, "kerberos-keytab",
+                          G_BINDING_SYNC_CREATE);
   g_object_bind_property (settings, "rdp-view-only",
                           rdp_server_interface, "view-only",
                           G_BINDING_SYNC_CREATE);
@@ -242,6 +273,14 @@ start_rdp_server_when_ready (GrdDaemon *daemon,
                            "notify::rdp-server-key",
                            G_CALLBACK (maybe_start_rdp_server),
                            daemon, G_CONNECT_SWAPPED);
+  g_signal_connect_object (G_OBJECT (settings),
+                           "notify::rdp-auth-methods",
+                           G_CALLBACK (maybe_start_rdp_server),
+                           daemon, G_CONNECT_SWAPPED);
+  g_signal_connect_object (G_OBJECT (settings),
+                           "notify::rdp-kerberos-keytab",
+                           G_CALLBACK (maybe_start_rdp_server),
+                           daemon, G_CONNECT_SWAPPED);
 }
 
 static void
@@ -256,6 +295,8 @@ stop_rdp_server (GrdDaemon *daemon)
 
   g_signal_emit (daemon, signals[RDP_SERVER_STOPPED], 0);
   grd_rdp_server_stop (priv->rdp_server);
+  g_clear_object (&priv->other_rdp_server_iface);
+  g_clear_handle_id (&priv->other_rdp_server_watch_name_id, g_bus_unwatch_name);
   g_clear_object (&priv->rdp_server);
   g_clear_handle_id (&priv->restart_rdp_server_source_id, g_source_remove);
   g_message ("RDP server stopped");
@@ -269,9 +310,104 @@ on_rdp_server_binding_failed (GrdRdpServer *rdp_server,
 }
 
 static void
+on_other_rdp_server_new_connection (GrdDBusRemoteDesktopRdpServer *interface,
+                                    GrdDaemon                     *daemon)
+{
+  GrdDaemonPrivate *priv = grd_daemon_get_instance_private (daemon);
+
+  g_assert (priv->rdp_server);
+
+  grd_rdp_server_stop_sessions (priv->rdp_server);
+}
+
+static void
+on_remote_desktop_rdp_server_proxy_acquired (GObject      *object,
+                                             GAsyncResult *result,
+                                             gpointer      user_data)
+{
+  GrdDaemon *daemon = user_data;
+  GrdDaemonPrivate *priv = grd_daemon_get_instance_private (daemon);
+  g_autoptr (GrdDBusRemoteDesktopRdpServer) proxy = NULL;
+  g_autoptr (GError) error = NULL;
+
+  proxy = grd_dbus_remote_desktop_rdp_server_proxy_new_for_bus_finish (result,
+                                                                       &error);
+  if (!proxy)
+    {
+      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        return;
+
+      g_warning ("Failed to create remote desktop rdp server proxy: %s",
+                 error->message);
+      return;
+    }
+
+  priv->other_rdp_server_iface = g_steal_pointer (&proxy);
+  g_signal_connect (priv->other_rdp_server_iface, "new-connection",
+                    G_CALLBACK (on_other_rdp_server_new_connection), daemon);
+}
+
+static void
+on_remote_desktop_rdp_server_name_appeared (GDBusConnection *connection,
+                                            const char      *name,
+                                            const char      *name_owner,
+                                            gpointer         user_data)
+{
+  GrdDaemon *daemon = user_data;
+  GrdDaemonPrivate *priv = grd_daemon_get_instance_private (daemon);
+
+  grd_dbus_remote_desktop_rdp_server_proxy_new (
+    connection,
+    G_DBUS_PROXY_FLAGS_NONE,
+    name,
+    GRD_RDP_SERVER_OBJECT_PATH,
+    priv->cancellable,
+    on_remote_desktop_rdp_server_proxy_acquired,
+    daemon);
+}
+
+static void
+on_remote_desktop_rdp_server_name_vanished (GDBusConnection *connection,
+                                            const char      *name,
+                                            gpointer         user_data)
+{
+  GrdDaemon *daemon = user_data;
+  GrdDaemonPrivate *priv = grd_daemon_get_instance_private (daemon);
+
+  g_clear_object (&priv->other_rdp_server_iface);
+}
+
+static void
+connect_to_other_rdp_server (GrdDaemon *daemon)
+{
+  GrdDaemonPrivate *priv = grd_daemon_get_instance_private (daemon);
+  GrdRuntimeMode runtime_mode = grd_context_get_runtime_mode (priv->context);
+  const char *bus_name;
+
+  if (priv->other_rdp_server_watch_name_id != 0)
+    return;
+
+  if (runtime_mode == GRD_RUNTIME_MODE_HEADLESS)
+    bus_name = GRD_DAEMON_HANDOVER_APPLICATION_ID;
+  else if (runtime_mode == GRD_RUNTIME_MODE_HANDOVER)
+    bus_name = GRD_DAEMON_HEADLESS_APPLICATION_ID;
+  else
+    g_assert_not_reached ();
+
+  priv->other_rdp_server_watch_name_id =
+    g_bus_watch_name (G_BUS_TYPE_SESSION,
+                      bus_name,
+                      G_BUS_NAME_WATCHER_FLAGS_NONE,
+                      on_remote_desktop_rdp_server_name_appeared,
+                      on_remote_desktop_rdp_server_name_vanished,
+                      daemon, NULL);
+}
+
+static void
 start_rdp_server (GrdDaemon *daemon)
 {
   GrdDaemonPrivate *priv = grd_daemon_get_instance_private (daemon);
+  GrdRuntimeMode runtime_mode = grd_context_get_runtime_mode (priv->context);
   g_autoptr (GError) error = NULL;
 
   g_assert (!priv->rdp_server);
@@ -288,6 +424,10 @@ start_rdp_server (GrdDaemon *daemon)
     {
       g_signal_emit (daemon, signals[RDP_SERVER_STARTED], 0);
       g_message ("RDP server started");
+
+      if (runtime_mode == GRD_RUNTIME_MODE_HANDOVER ||
+          runtime_mode == GRD_RUNTIME_MODE_HEADLESS)
+        connect_to_other_rdp_server (daemon);
     }
 }
 
@@ -297,6 +437,8 @@ maybe_start_rdp_server (GrdDaemon *daemon)
   GrdDaemonPrivate *priv = grd_daemon_get_instance_private (daemon);
   GrdSettings *settings = grd_context_get_settings (priv->context);
   g_autoptr (GError) error = NULL;
+  GrdRdpAuthMethods auth_methods = 0;
+  g_autofree char *kerberos_keytab = NULL;
   g_autofree char *certificate = NULL;
   g_autofree char *key = NULL;
   gboolean rdp_enabled = FALSE;
@@ -305,16 +447,37 @@ maybe_start_rdp_server (GrdDaemon *daemon)
     return;
 
   if (!GRD_DAEMON_GET_CLASS (daemon)->is_daemon_ready (daemon))
-    return;
+    {
+      g_debug ("Daemon not ready, not starting RDP server");
+      return;
+    }
 
   g_object_get (G_OBJECT (settings),
                 "rdp-enabled", &rdp_enabled,
+                "rdp-auth-methods", &auth_methods,
+                "rdp-kerberos-keytab", &kerberos_keytab,
                 "rdp-server-cert", &certificate,
                 "rdp-server-key", &key,
                 NULL);
 
   if (!rdp_enabled)
-    return;
+    {
+      g_debug ("RDP not enabled, not starting RDP server");
+      return;
+    }
+
+  if (!auth_methods)
+    {
+      g_warning ("No RDP auth methods configured, not enabling server.");
+      return;
+    }
+
+  if (auth_methods & GRD_RDP_AUTH_METHOD_KERBEROS &&
+      !kerberos_keytab)
+    {
+      g_debug ("Kerberos keytab not set, not starting RDP server");
+      return;
+    }
 
   if ((certificate && key) ||
       grd_context_get_runtime_mode (priv->context) == GRD_RUNTIME_MODE_HANDOVER)
@@ -882,6 +1045,8 @@ grd_daemon_class_init (GrdDaemonClass *klass)
                                               0,
                                               NULL, NULL, NULL,
                                               G_TYPE_NONE, 0);
+
+  grd_dbus_error_quark ();
 }
 
 static void
@@ -969,6 +1134,7 @@ main (int argc, char **argv)
   gboolean handover = FALSE;
   int rdp_port = -1;
   int vnc_port = -1;
+  int max_parallel_connections = DEFAULT_MAX_PARALLEL_CONNECTIONS;
 
   GOptionEntry entries[] = {
     { "version", 0, 0, G_OPTION_ARG_NONE, &print_version,
@@ -985,11 +1151,15 @@ main (int argc, char **argv)
       "RDP port", NULL },
     { "vnc-port", 0, 0, G_OPTION_ARG_INT, &vnc_port,
       "VNC port", NULL },
+    { "max-parallel-connections", 0, 0,
+      G_OPTION_ARG_INT, &max_parallel_connections,
+      "Max number of parallel connections (0 for unlimited, "
+      "default: " QUOTE(DEFAULT_MAX_PARALLEL_CONNECTIONS) ")", NULL },
     { NULL }
   };
   g_autoptr (GOptionContext) option_context = NULL;
   g_autoptr (GrdDaemon) daemon = NULL;
-  GError *error = NULL;
+  g_autoptr (GError) error = NULL;
   GrdRuntimeMode runtime_mode;
 
   g_set_application_name (_("GNOME Remote Desktop"));
@@ -999,7 +1169,6 @@ main (int argc, char **argv)
   if (!g_option_context_parse (option_context, &argc, &argv, &error))
     {
       g_printerr ("Invalid option: %s\n", error->message);
-      g_error_free (error);
       return EXIT_FAILURE;
     }
 
@@ -1011,7 +1180,18 @@ main (int argc, char **argv)
 
   if (count_trues (3, headless, system, handover) > 1)
     {
-      g_printerr ("Invalid option: More than one runtime mode specified");
+      g_printerr ("Invalid option: More than one runtime mode specified\n");
+      return EXIT_FAILURE;
+    }
+
+  if (max_parallel_connections == 0)
+    {
+      max_parallel_connections = INT_MAX;
+    }
+  else if (max_parallel_connections < 0)
+    {
+      g_printerr ("Invalid number of max parallel connections: %d\n",
+                  max_parallel_connections);
       return EXIT_FAILURE;
     }
 
@@ -1048,7 +1228,6 @@ main (int argc, char **argv)
   if (!daemon)
     {
       g_printerr ("Failed to initialize: %s\n", error->message);
-      g_error_free (error);
       return EXIT_FAILURE;
     }
 
@@ -1061,6 +1240,9 @@ main (int argc, char **argv)
     grd_settings_override_rdp_port (settings, rdp_port);
   if (vnc_port != -1)
     grd_settings_override_vnc_port (settings, vnc_port);
+
+  grd_settings_override_max_parallel_connections (settings,
+                                                  max_parallel_connections);
 
   return g_application_run (G_APPLICATION (daemon), argc, argv);
 }

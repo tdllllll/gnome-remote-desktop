@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <glib.h>
+
 typedef struct _GrdAVCFrameInfo GrdAVCFrameInfo;
 typedef struct _GrdBitstream GrdBitstream;
 typedef struct _GrdClipboard GrdClipboard;
@@ -42,11 +44,14 @@ typedef struct _GrdRdpAudioVolumeData GrdRdpAudioVolumeData;
 typedef struct _GrdRdpBuffer GrdRdpBuffer;
 typedef struct _GrdRdpBufferInfo GrdRdpBufferInfo;
 typedef struct _GrdRdpBufferPool GrdRdpBufferPool;
+typedef struct _GrdRdpCameraStream GrdRdpCameraStream;
 typedef struct _GrdRdpConnectTimeAutodetection GrdRdpConnectTimeAutodetection;
 typedef struct _GrdRdpCursorRenderer GrdRdpCursorRenderer;
 typedef struct _GrdRdpDamageDetector GrdRdpDamageDetector;
 typedef struct _GrdRdpDvcAudioInput GrdRdpDvcAudioInput;
 typedef struct _GrdRdpDvcAudioPlayback GrdRdpDvcAudioPlayback;
+typedef struct _GrdRdpDvcCameraDevice GrdRdpDvcCameraDevice;
+typedef struct _GrdRdpDvcCameraEnumerator GrdRdpDvcCameraEnumerator;
 typedef struct _GrdRdpDvcDisplayControl GrdRdpDvcDisplayControl;
 typedef struct _GrdRdpDvcGraphicsPipeline GrdRdpDvcGraphicsPipeline;
 typedef struct _GrdRdpDvcHandler GrdRdpDvcHandler;
@@ -74,6 +79,7 @@ typedef struct _GrdRdpSurface GrdRdpSurface;
 typedef struct _GrdRdpSurfaceRenderer GrdRdpSurfaceRenderer;
 typedef struct _GrdRdpSwEncoderCa GrdRdpSwEncoderCa;
 typedef struct _GrdRdpViewCreator GrdRdpViewCreator;
+typedef struct _GrdSampleBuffer GrdSampleBuffer;
 typedef struct _GrdSession GrdSession;
 typedef struct _GrdSessionRdp GrdSessionRdp;
 typedef struct _GrdSessionVnc GrdSessionVnc;
@@ -83,12 +89,21 @@ typedef struct _GrdVkBuffer GrdVkBuffer;
 typedef struct _GrdVkDevice GrdVkDevice;
 typedef struct _GrdVkImage GrdVkImage;
 typedef struct _GrdVkMemory GrdVkMemory;
+typedef struct _GrdVkPhysicalDevice GrdVkPhysicalDevice;
+typedef struct _GrdVkQueue GrdVkQueue;
 typedef struct _GrdVkSPIRVSources GrdVkSPIRVSources;
 typedef struct _GrdVkSPIRVSource GrdVkSPIRVSource;
-typedef struct _GrdVkQueue GrdVkQueue;
 typedef struct _GrdVncServer GrdVncServer;
 
 typedef enum _GrdPixelFormat
 {
   GRD_PIXEL_FORMAT_RGBA8888,
 } GrdPixelFormat;
+
+typedef enum _GrdDBusError
+{
+  GRD_DBUS_ERROR_NO_HANDOVER,
+} GrdDBusError;
+
+#define GRD_DBUS_ERROR grd_dbus_error_quark ()
+GQuark grd_dbus_error_quark (void);

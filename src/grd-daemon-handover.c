@@ -46,6 +46,8 @@ struct _GrdDaemonHandover
   GrdDBusRemoteDesktopRdpDispatcher *remote_desktop_dispatcher;
   GrdDBusRemoteDesktopRdpHandover *remote_desktop_handover;
 
+  GDBusObjectManager *handover_object_manager;
+
   GrdSession *session;
 
   gboolean use_system_credentials;
@@ -58,6 +60,11 @@ struct _GrdDaemonHandover
 };
 
 G_DEFINE_TYPE (GrdDaemonHandover, grd_daemon_handover, GRD_TYPE_DAEMON)
+
+static void
+on_remote_desktop_rdp_dispatcher_handover_requested (GObject      *object,
+                                                     GAsyncResult *result,
+                                                     gpointer      user_data);
 
 static gboolean
 grd_daemon_handover_is_ready (GrdDaemon *daemon)
@@ -265,13 +272,20 @@ on_start_handover_finished (GObject      *object,
 }
 
 static void
-start_handover (GrdDaemonHandover *daemon_handover,
-                const char        *username,
-                const char        *password)
+start_handover (GrdDaemonHandover *daemon_handover)
 {
-  GCancellable *cancellable =
-    grd_daemon_get_cancellable (GRD_DAEMON (daemon_handover));
+  GrdDaemon *daemon = GRD_DAEMON (daemon_handover);
+  GrdContext *context = grd_daemon_get_context (daemon);
+  GrdSettings *settings = grd_context_get_settings (context);
+  GCancellable *cancellable = grd_daemon_get_cancellable (daemon);
+  g_autofree char *username = NULL;
+  g_autofree char *password = NULL;
   const char *object_path;
+
+  if (!grd_settings_get_rdp_credentials (settings,
+                                         &username, &password,
+                                         NULL))
+    g_assert_not_reached ();
 
   object_path = g_dbus_proxy_get_object_path (
                   G_DBUS_PROXY (daemon_handover->remote_desktop_handover));
@@ -409,6 +423,50 @@ inform_about_insecure_connection (GrdDaemonHandover *daemon_handover)
 }
 
 static void
+on_redirect_client (GrdDBusRemoteDesktopRdpHandover *interface,
+                    const char                      *routing_token,
+                    const char                      *username,
+                    const char                      *password,
+                    GrdDaemonHandover               *daemon_handover)
+{
+  const char *object_path =
+    g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
+  GrdContext *context = grd_daemon_get_context (GRD_DAEMON (daemon_handover));
+  GrdSettings *settings = grd_context_get_settings (context);
+  GrdSessionRdp *session_rdp = GRD_SESSION_RDP (daemon_handover->session);
+  g_autofree char *certificate = NULL;
+
+  g_debug ("[DaemonHandover] At: %s, received RedirectClient signal",
+           object_path);
+
+  g_object_get (G_OBJECT (settings),
+                "rdp-server-cert", &certificate,
+                NULL);
+
+  if (!grd_session_rdp_send_server_redirection (session_rdp, routing_token,
+                                                username, password,
+                                                certificate))
+    grd_session_stop (daemon_handover->session);
+}
+
+static void
+on_handover_is_waiting_changed (GrdDBusRemoteDesktopRdpHandover *proxy,
+                                GParamSpec                      *pspec,
+                                GrdDaemonHandover               *daemon_handover)
+{
+  gboolean handover_is_waiting;
+
+  handover_is_waiting = 
+    grd_dbus_remote_desktop_rdp_handover_get_handover_is_waiting (
+      daemon_handover->remote_desktop_handover);
+
+  if (!handover_is_waiting)
+    return;
+
+  start_handover (daemon_handover);
+}
+
+static void
 on_incoming_new_connection (GrdRdpServer      *rdp_server,
                             GrdSession        *session,
                             GrdDaemonHandover *daemon_handover)
@@ -437,93 +495,171 @@ on_incoming_new_connection (GrdRdpServer      *rdp_server,
 }
 
 static void
-on_rdp_server_started (GrdDaemonHandover *daemon_handover)
+setup_handover (GrdDaemonHandover *daemon_handover)
 {
-  GrdDaemon *daemon = GRD_DAEMON (daemon_handover);
-  GrdContext *context = grd_daemon_get_context (daemon);
-  GrdSettings *settings = grd_context_get_settings (context);
-  GrdRdpServer *rdp_server = grd_daemon_get_rdp_server (daemon);
-  g_autofree char *username = NULL;
-  g_autofree char *password = NULL;
+  GrdRdpServer *rdp_server;
+  gboolean handover_is_waiting;
 
-  if (!grd_settings_get_rdp_credentials (settings,
-                                         &username, &password,
-                                         NULL))
-    g_assert_not_reached ();
+  if (!daemon_handover->remote_desktop_handover)
+    return;
 
-  g_signal_connect (daemon_handover->remote_desktop_handover,
-                    "take-client-ready", G_CALLBACK (on_take_client_ready),
-                    daemon_handover);
+  rdp_server = grd_daemon_get_rdp_server (GRD_DAEMON (daemon_handover));
+  if (!rdp_server)
+    return;
 
-  start_handover (daemon_handover, username, password);
+  g_signal_connect (daemon_handover->remote_desktop_handover, "take-client-ready",
+                    G_CALLBACK (on_take_client_ready), daemon_handover);
+  g_signal_connect (daemon_handover->remote_desktop_handover, "redirect-client",
+                    G_CALLBACK (on_redirect_client), daemon_handover);
+  g_signal_connect (daemon_handover->remote_desktop_handover, "notify::handover-is-waiting",
+                    G_CALLBACK (on_handover_is_waiting_changed), daemon_handover);
 
   g_signal_connect (rdp_server, "incoming-new-connection",
-                    G_CALLBACK (on_incoming_new_connection),
-                    daemon_handover);
+                    G_CALLBACK (on_incoming_new_connection), daemon_handover);
+
+  handover_is_waiting = grd_dbus_remote_desktop_rdp_handover_get_handover_is_waiting (
+                          daemon_handover->remote_desktop_handover);
+
+  if (handover_is_waiting)
+    start_handover (daemon_handover);
 }
 
 static void
-on_rdp_server_stopped (GrdDaemonHandover *daemon_handover)
+teardown_handover (GrdDaemonHandover *daemon_handover)
 {
   GrdRdpServer *rdp_server =
     grd_daemon_get_rdp_server (GRD_DAEMON (daemon_handover));
 
   if (daemon_handover->remote_desktop_handover)
     {
-      g_signal_handlers_disconnect_by_func (
-        daemon_handover->remote_desktop_handover,
-        G_CALLBACK (on_take_client_ready),
-        daemon_handover);
+      g_signal_handlers_disconnect_by_func (daemon_handover->remote_desktop_handover,
+                                            G_CALLBACK (on_take_client_ready),
+                                            daemon_handover);
+      g_signal_handlers_disconnect_by_func (daemon_handover->remote_desktop_handover,
+                                            G_CALLBACK (on_redirect_client),
+                                            daemon_handover);
+      g_signal_handlers_disconnect_by_func (daemon_handover->remote_desktop_handover,
+                                            G_CALLBACK (on_handover_is_waiting_changed),
+                                            daemon_handover);
     }
 
-  g_signal_handlers_disconnect_by_func (rdp_server,
-                                        G_CALLBACK (on_incoming_new_connection),
+  if (rdp_server)
+    {
+      g_signal_handlers_disconnect_by_func (rdp_server,
+                                            G_CALLBACK (on_incoming_new_connection),
+                                            daemon_handover);
+    }
+}
+
+static void
+on_rdp_server_started (GrdDaemonHandover *daemon_handover)
+{
+  setup_handover (daemon_handover);
+}
+
+static void
+on_rdp_server_stopped (GrdDaemonHandover *daemon_handover)
+{
+  teardown_handover (daemon_handover);
+}
+
+static void
+on_handover_object_added (GDBusObjectManager *manager,
+                          GDBusObject        *object,
+                          GrdDaemonHandover  *daemon_handover)
+{
+  g_autofree char *session_id = NULL;
+  g_autofree char *expected_object_path = NULL;
+  const char *object_path;
+  GCancellable *cancellable;
+
+  session_id = grd_get_session_id_from_pid (getpid ());
+  if (!session_id)
+    {
+      g_warning ("[DaemonHandover] Could not get session id");
+      return;
+    }
+
+  expected_object_path = g_strdup_printf ("%s/session%s",
+                                          REMOTE_DESKTOP_HANDOVERS_OBJECT_PATH,
+                                          session_id);
+  object_path = g_dbus_object_get_object_path (object);
+
+  if (g_strcmp0 (object_path, expected_object_path) != 0)
+    {
+      g_debug ("[DaemonHandover] Ignoring handover object at: %s, "
+               "expected: %s", object_path, expected_object_path);
+      return;
+    }
+
+  cancellable = grd_daemon_get_cancellable (GRD_DAEMON (daemon_handover));
+  grd_dbus_remote_desktop_rdp_dispatcher_call_request_handover (
+    daemon_handover->remote_desktop_dispatcher,
+    cancellable,
+    on_remote_desktop_rdp_dispatcher_handover_requested,
+    daemon_handover);
+}
+
+static void
+on_handover_object_manager_acquired (GObject      *source_object,
+                                     GAsyncResult *result,
+                                     gpointer      user_data)
+{
+  g_autoptr (GDBusObjectManager) manager = NULL;
+  g_autoptr (GError) error = NULL;
+  GrdDaemonHandover *daemon_handover;
+
+  manager =
+    grd_dbus_remote_desktop_object_manager_client_new_for_bus_finish (result, 
+                                                                      &error);
+  if (!manager)
+    {
+      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        g_warning ("[DaemonHandover] Failed to create handover object manager: %s",
+                   error->message);
+      return;
+    }
+
+  daemon_handover = GRD_DAEMON_HANDOVER (user_data);
+  daemon_handover->handover_object_manager = g_steal_pointer (&manager);
+
+  g_debug ("[DaemonHandover] Watching handover objects");
+
+  g_signal_connect (daemon_handover->handover_object_manager, "object-added",
+                    G_CALLBACK (on_handover_object_added), daemon_handover);
+}
+
+static void
+start_watching_handover_objects (GrdDaemonHandover *daemon_handover)
+{
+  GCancellable *cancellable;
+
+  if (daemon_handover->handover_object_manager)
+    return;
+
+  cancellable = grd_daemon_get_cancellable (GRD_DAEMON (daemon_handover));
+
+  grd_dbus_remote_desktop_object_manager_client_new_for_bus (
+    G_BUS_TYPE_SYSTEM,
+    G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_DO_NOT_AUTO_START,
+    REMOTE_DESKTOP_BUS_NAME,
+    REMOTE_DESKTOP_HANDOVERS_OBJECT_PATH,
+    cancellable,
+    on_handover_object_manager_acquired,
+    daemon_handover);
+}
+
+static void
+stop_watching_handover_objects (GrdDaemonHandover *daemon_handover)
+{
+  if (!daemon_handover->handover_object_manager)
+    return;
+
+  g_signal_handlers_disconnect_by_func (daemon_handover->handover_object_manager,
+                                        G_CALLBACK (on_handover_object_added),
                                         daemon_handover);
-}
 
-static void
-on_redirect_client (GrdDBusRemoteDesktopRdpHandover *interface,
-                    const char                      *routing_token,
-                    const char                      *username,
-                    const char                      *password,
-                    GrdDaemonHandover               *daemon_handover)
-{
-  const char *object_path =
-    g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
-  GrdContext *context = grd_daemon_get_context (GRD_DAEMON (daemon_handover));
-  GrdSettings *settings = grd_context_get_settings (context);
-  GrdSessionRdp *session_rdp = GRD_SESSION_RDP (daemon_handover->session);
-  g_autofree char *certificate = NULL;
-
-  g_debug ("[DaemonHandover] At: %s, received RedirectClient signal",
-           object_path);
-
-  g_object_get (G_OBJECT (settings),
-                "rdp-server-cert", &certificate,
-                NULL);
-
-  if (!grd_session_rdp_send_server_redirection (session_rdp, routing_token,
-                                                username, password,
-                                                certificate))
-    grd_session_stop (daemon_handover->session);
-}
-
-static void
-on_restart_handover (GrdDBusRemoteDesktopRdpHandover *proxy,
-                     GrdDaemonHandover               *daemon_handover)
-{
-  GrdDaemon *daemon = GRD_DAEMON (daemon_handover);
-  GrdContext *context = grd_daemon_get_context (daemon);
-  GrdSettings *settings = grd_context_get_settings (context);
-  g_autofree char *username = NULL;
-  g_autofree char *password = NULL;
-
-  if (!grd_settings_get_rdp_credentials (settings,
-                                         &username, &password,
-                                         NULL))
-    g_assert_not_reached ();
-
-  start_handover (daemon_handover, username, password);
+  g_clear_object (&daemon_handover->handover_object_manager);
 }
 
 static void
@@ -549,12 +685,12 @@ on_remote_desktop_rdp_handover_proxy_acquired (GObject      *object,
     }
 
   daemon_handover = GRD_DAEMON_HANDOVER (user_data);
+
+  stop_watching_handover_objects (daemon_handover);
+
   daemon_handover->remote_desktop_handover = g_steal_pointer (&proxy);
 
-  g_signal_connect (daemon_handover->remote_desktop_handover, "redirect-client",
-                    G_CALLBACK (on_redirect_client), daemon_handover);
-  g_signal_connect (daemon_handover->remote_desktop_handover, "restart-handover",
-                    G_CALLBACK (on_restart_handover), daemon_handover);
+  setup_handover (daemon_handover);
 
   grd_daemon_maybe_enable_services (GRD_DAEMON (daemon_handover));
 }
@@ -580,11 +716,16 @@ on_remote_desktop_rdp_dispatcher_handover_requested (GObject      *object,
       &error);
   if (!success)
     {
-      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        return;
-
-      g_warning ("[DaemonHandover] Failed to request remote desktop "
-                 "handover: %s", error->message);
+      if (g_error_matches (error, GRD_DBUS_ERROR, GRD_DBUS_ERROR_NO_HANDOVER))
+        {
+          daemon_handover = GRD_DAEMON_HANDOVER (user_data);
+          start_watching_handover_objects (daemon_handover);
+        }
+      else if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        {
+          g_warning ("[DaemonHandover] Failed to request remote desktop "
+                     "handover: %s", error->message);
+        }
       return;
     }
 
@@ -649,6 +790,8 @@ on_gnome_remote_desktop_name_appeared (GDBusConnection *connection,
   GCancellable *cancellable =
     grd_daemon_get_cancellable (GRD_DAEMON (daemon_handover));
 
+  g_debug ("[DaemonHandover] %s name appeared", name);
+
   grd_dbus_remote_desktop_rdp_dispatcher_proxy_new (
     connection,
     G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
@@ -666,12 +809,17 @@ on_gnome_remote_desktop_name_vanished (GDBusConnection *connection,
 {
   GrdDaemonHandover *daemon_handover = user_data;
 
-  g_warning ("[DaemonHandover] %s name vanished, shutting down daemon",
-             REMOTE_DESKTOP_BUS_NAME);
+  g_warning ("[DaemonHandover] %s name vanished", name);
 
-  g_application_release (G_APPLICATION (daemon_handover));
+  teardown_handover (daemon_handover);
 
-  grd_session_manager_call_logout_sync ();
+  g_clear_object (&daemon_handover->remote_desktop_handover);
+  g_clear_object (&daemon_handover->remote_desktop_dispatcher);
+
+  stop_watching_handover_objects (daemon_handover);
+
+  if (grd_is_remote_login ())
+    grd_session_manager_call_logout_sync ();
 }
 
 GrdDaemonHandover *
@@ -732,6 +880,8 @@ grd_daemon_handover_shutdown (GApplication *app)
 
   g_clear_object (&daemon_handover->remote_desktop_handover);
   g_clear_object (&daemon_handover->remote_desktop_dispatcher);
+
+  stop_watching_handover_objects (daemon_handover);
 
   g_clear_handle_id (&daemon_handover->gnome_remote_desktop_watch_name_id,
                      g_bus_unwatch_name);

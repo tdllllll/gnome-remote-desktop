@@ -56,6 +56,13 @@ grd_sync_point_clear (GrdSyncPoint *sync_point)
 }
 
 void
+grd_sync_point_reset (GrdSyncPoint *sync_point)
+{
+  sync_point->completed = FALSE;
+  sync_point->success = FALSE;
+}
+
+void
 grd_sync_point_complete (GrdSyncPoint *sync_point,
                          gboolean      success)
 {
@@ -477,4 +484,11 @@ grd_systemd_unit_get_active_state (GDBusProxy                 *unit_proxy,
     *active_state = GRD_SYSTEMD_UNIT_ACTIVE_STATE_UNKNOWN;
 
   return TRUE;
+}
+
+void
+grd_close_connection_and_notify (GSocketConnection *connection)
+{
+  g_io_stream_close (G_IO_STREAM (connection), NULL, NULL);
+  g_object_notify (G_OBJECT (connection), "closed");
 }

@@ -21,6 +21,8 @@
 
 #include "grd-image-view-nv12.h"
 
+#include "grd-vk-image.h"
+
 struct _GrdImageViewNV12
 {
   GrdImageView parent;
@@ -32,16 +34,46 @@ struct _GrdImageViewNV12
 G_DEFINE_TYPE (GrdImageViewNV12, grd_image_view_nv12,
                GRD_TYPE_IMAGE_VIEW)
 
-GrdVkImage *
+VkImageView
 grd_image_view_nv12_get_y_layer (GrdImageViewNV12 *image_view_nv12)
 {
-  return image_view_nv12->vk_y_layer;
+  return grd_vk_image_get_image_view (image_view_nv12->vk_y_layer);
 }
 
-GrdVkImage *
+VkImageView
 grd_image_view_nv12_get_uv_layer (GrdImageViewNV12 *image_view_nv12)
 {
-  return image_view_nv12->vk_uv_layer;
+  return grd_vk_image_get_image_view (image_view_nv12->vk_uv_layer);
+}
+
+GList *
+grd_image_view_nv12_get_images (GrdImageViewNV12 *image_view_nv12)
+{
+  GList *images = NULL;
+
+  if (image_view_nv12->vk_y_layer)
+    images = g_list_append (images, image_view_nv12->vk_y_layer);
+  if (image_view_nv12->vk_uv_layer)
+    images = g_list_append (images, image_view_nv12->vk_uv_layer);
+
+  return images;
+}
+
+VkImageLayout
+grd_image_view_nv12_get_image_layout (GrdImageViewNV12 *image_view_nv12)
+{
+  g_assert (grd_vk_image_get_image_layout (image_view_nv12->vk_y_layer) ==
+            grd_vk_image_get_image_layout (image_view_nv12->vk_uv_layer));
+
+  return grd_vk_image_get_image_layout (image_view_nv12->vk_y_layer);
+}
+
+void
+grd_image_view_nv12_set_image_layout (GrdImageViewNV12 *image_view_nv12,
+                                      VkImageLayout     vk_image_layout)
+{
+  grd_vk_image_set_image_layout (image_view_nv12->vk_y_layer, vk_image_layout);
+  grd_vk_image_set_image_layout (image_view_nv12->vk_uv_layer, vk_image_layout);
 }
 
 void
