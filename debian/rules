@@ -38,4 +38,5 @@ override_dh_installsystemduser:
 override_dh_installsystemd:
 	dh_installsystemd --no-enable
 
-override_dh_gnome_clean:
+# Skip. We only use dh_gnome for dh_translations for Ubuntu
+override_dh_gnome:
