@@ -21,7 +21,9 @@
 
 #include "grd-vk-device.h"
 
+#include <fcntl.h>
 #include <gio/gio.h>
+#include <glib/gstdio.h>
 
 #include "grd-hwaccel-vulkan.h"
 #include "grd-vk-physical-device.h"
@@ -44,6 +46,8 @@ struct _GrdVkDevice
 
   VkDevice vk_device;
   VkPipelineCache vk_pipeline_cache;
+
+  int drm_render_node_fd;
 
   uint32_t queue_family_idx;
   uint32_t max_queues;
@@ -78,6 +82,12 @@ VkPipelineCache
 grd_vk_device_get_pipeline_cache (GrdVkDevice *device)
 {
   return device->vk_pipeline_cache;
+}
+
+int
+grd_vk_device_get_drm_render_node_fd (GrdVkDevice *device)
+{
+  return device->drm_render_node_fd;
 }
 
 float
@@ -218,6 +228,25 @@ find_queue_family_with_most_queues (GrdVkDevice *device)
 }
 
 static gboolean
+open_drm_render_node (GrdVkDevice  *device,
+                      GError      **error)
+{
+  const char *drm_render_node =
+    grd_vk_physical_device_get_drm_render_node (device->physical_device);
+
+  device->drm_render_node_fd = open (drm_render_node, O_RDWR | O_CLOEXEC);
+  if (device->drm_render_node_fd < 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to open render node file descriptor: %s",
+                   g_strerror (errno));
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
 create_pipeline_cache (GrdVkDevice  *device,
                        GError      **error)
 {
@@ -286,6 +315,17 @@ load_device_funcs (GrdVkDevice  *device,
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Failed to get device function address for function "
                    "\"vkQueueSubmit2KHR\"");
+      return FALSE;
+    }
+
+  /* VK_KHR_external_semaphore_fd */
+  device_funcs->vkImportSemaphoreFdKHR = (PFN_vkImportSemaphoreFdKHR)
+    vkGetDeviceProcAddr (vk_device, "vkImportSemaphoreFdKHR");
+  if (!device_funcs->vkImportSemaphoreFdKHR)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to get device function address for function "
+                   "\"vkImportSemaphoreFdKHR\"");
       return FALSE;
     }
 
@@ -402,7 +442,7 @@ grd_vk_device_new (GrdVkPhysicalDevice      *physical_device,
   VkPhysicalDeviceZeroInitializeWorkgroupMemoryFeatures zero_init_features = {};
   VkDeviceQueueCreateInfo device_queue_create_info = {};
   float queue_priorities[MAX_DEVICE_QUEUES] = {};
-  const char *extensions[7] = {};
+  const char *extensions[8] = {};
   uint32_t n_extensions = 0;
   VkResult vk_result;
   uint32_t i;
@@ -428,6 +468,7 @@ grd_vk_device_new (GrdVkPhysicalDevice      *physical_device,
   extensions[n_extensions++] = VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME;
   extensions[n_extensions++] = VK_KHR_ZERO_INITIALIZE_WORKGROUP_MEMORY_EXTENSION_NAME;
   extensions[n_extensions++] = VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME;
+  extensions[n_extensions++] = VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME;
 
   device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   device_create_info.queueCreateInfoCount = 1;
@@ -464,6 +505,9 @@ grd_vk_device_new (GrdVkPhysicalDevice      *physical_device,
       return NULL;
     }
   g_assert (device->vk_device != VK_NULL_HANDLE);
+
+  if (!open_drm_render_node (device, error))
+    return NULL;
 
   if (!create_pipeline_cache (device, error))
     return NULL;
@@ -512,6 +556,8 @@ grd_vk_device_dispose (GObject *object)
 
   if (device->vk_device != VK_NULL_HANDLE)
     destroy_shader_modules (device);
+
+  g_clear_fd (&device->drm_render_node_fd, NULL);
 
   if (device->vk_pipeline_cache != VK_NULL_HANDLE)
     {

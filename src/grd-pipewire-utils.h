@@ -54,3 +54,13 @@ gboolean grd_spa_pixel_format_to_grd_pixel_format (uint32_t        spa_format,
 void grd_get_spa_format_details (enum spa_video_format  spa_format,
                                  uint32_t              *drm_format,
                                  int                   *bpp);
+
+void grd_append_pod_offset (GArray                 *pod_offsets,
+                            struct spa_pod_builder *pod_builder);
+
+GPtrArray *grd_finish_pipewire_params (struct spa_pod_builder *pod_builder,
+                                       GArray                 *pod_offsets);
+
+gboolean grd_spa_buffer_find_syncobj_fds (struct spa_buffer *spa_buffer,
+                                          int               *acquire_syncobj_fd,
+                                          int               *release_syncobj_fd);

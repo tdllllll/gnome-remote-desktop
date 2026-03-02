@@ -57,6 +57,8 @@ void grd_egl_thread_download (GrdEglThread         *egl_thread,
                               const uint32_t       *strides,
                               const uint32_t       *offsets,
                               const uint64_t       *modifiers,
+                              int                   syncobj_fd,
+                              uint64_t              timeline_point,
                               GrdEglThreadCallback  callback,
                               gpointer              user_data,
                               GDestroyNotify        destroy);
@@ -110,5 +112,9 @@ gboolean grd_egl_thread_get_modifiers_for_format (GrdEglThread  *egl_thread,
                                                   uint32_t       format,
                                                   int           *out_n_modifiers,
                                                   uint64_t     **out_modifiers);
+
+gboolean grd_egl_thread_supports_explicit_sync (GrdEglThread *egl_thread);
+
+int grd_egl_thread_get_render_node_fd (GrdEglThread *egl_thread);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (GrdEglThread, grd_egl_thread_free)

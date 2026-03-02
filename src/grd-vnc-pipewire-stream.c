@@ -23,18 +23,22 @@
 #include "grd-vnc-pipewire-stream.h"
 
 #include <drm_fourcc.h>
+#include <glib/gstdio.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/props.h>
 #include <spa/param/format-utils.h>
+#include <spa/pod/dynamic.h>
 #include <sys/mman.h>
 
 #include "grd-context.h"
+#include "grd-drm-utils.h"
 #include "grd-egl-thread.h"
 #include "grd-pipewire-utils.h"
 #include "grd-utils.h"
 #include "grd-vnc-cursor.h"
 
 #define MAX_FORMAT_PARAMS 2
+#define PARAMS_BUFFER_SIZE 1024
 
 enum
 {
@@ -54,9 +58,20 @@ typedef void (* GrdVncFrameReadyCallback) (GrdVncPipeWireStream *stream,
 
 typedef struct
 {
+  struct pw_stream *pw_stream;
+  struct pw_buffer *pw_buffer;
+
   GMutex buffer_mutex;
   gboolean is_locked;
-} BufferContext;
+
+  int device_fd;
+
+  int acquire_syncobj_fd;
+  int release_syncobj_fd;
+  uint64_t acquire_point;
+  uint64_t release_point;
+  gboolean needs_release;
+} GrdVncPwBuffer;
 
 struct _GrdVncFrame
 {
@@ -118,55 +133,136 @@ static void grd_vnc_frame_unref (GrdVncFrame *frame);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (GrdVncFrame, grd_vnc_frame_unref)
 
-static BufferContext *
-buffer_context_new (void)
+static enum spa_data_type
+get_pw_buffer_type (struct pw_buffer *pw_buffer)
 {
-  BufferContext *buffer_context;
+  struct spa_buffer *spa_buffer = pw_buffer->buffer;
 
-  buffer_context = g_new0 (BufferContext, 1);
-  g_mutex_init (&buffer_context->buffer_mutex);
-
-  return buffer_context;
+  return spa_buffer->datas[0].type;
 }
 
 static void
-buffer_context_free (BufferContext *buffer_context)
+grd_vnc_pw_buffer_update_timeline_points (GrdVncPwBuffer *vnc_pw_buffer)
 {
-  g_mutex_clear (&buffer_context->buffer_mutex);
+  struct spa_buffer *spa_buffer = vnc_pw_buffer->pw_buffer->buffer;
+  struct spa_meta_sync_timeline *sync_timeline;
 
-  g_free (buffer_context);
+  sync_timeline =
+    spa_buffer_find_meta_data (spa_buffer, SPA_META_SyncTimeline,
+                               sizeof (struct spa_meta_sync_timeline));
+  if (!sync_timeline)
+    return;
+
+  vnc_pw_buffer->acquire_point = sync_timeline->acquire_point;
+  vnc_pw_buffer->release_point = sync_timeline->release_point;
+  vnc_pw_buffer->needs_release = TRUE;
+}
+
+static GrdVncPwBuffer *
+grd_vnc_pw_buffer_new (struct pw_stream  *pw_stream,
+                       struct pw_buffer  *pw_buffer,
+                       int                device_fd,
+                       GError           **error)
+{
+  GrdVncPwBuffer *vnc_pw_buffer;
+
+  vnc_pw_buffer = g_new0 (GrdVncPwBuffer, 1);
+  vnc_pw_buffer->pw_stream = pw_stream;
+  vnc_pw_buffer->pw_buffer = pw_buffer;
+  g_mutex_init (&vnc_pw_buffer->buffer_mutex);
+
+  if (get_pw_buffer_type (pw_buffer) == SPA_DATA_DmaBuf)
+    {
+      struct spa_buffer *spa_buffer = pw_buffer->buffer;
+      int acquire_syncobj_fd, release_syncobj_fd;
+
+      if (grd_spa_buffer_find_syncobj_fds (spa_buffer,
+                                           &acquire_syncobj_fd,
+                                           &release_syncobj_fd))
+        {
+          vnc_pw_buffer->device_fd = device_fd;
+          vnc_pw_buffer->acquire_syncobj_fd = dup (acquire_syncobj_fd);
+          vnc_pw_buffer->release_syncobj_fd = dup (release_syncobj_fd);
+          grd_vnc_pw_buffer_update_timeline_points (vnc_pw_buffer);
+
+          if (vnc_pw_buffer->acquire_syncobj_fd == -1 ||
+              vnc_pw_buffer->release_syncobj_fd == -1)
+            {
+              g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
+                           "Failed to duplicate syncobj file descriptors: %s",
+                           g_strerror (errno));
+              return NULL;
+            }
+        }
+    }
+
+  return vnc_pw_buffer;
 }
 
 static void
+grd_vnc_pw_buffer_free (GrdVncPwBuffer *vnc_pw_buffer)
+{
+  g_mutex_clear (&vnc_pw_buffer->buffer_mutex);
+
+  g_clear_fd (&vnc_pw_buffer->acquire_syncobj_fd, NULL);
+  g_clear_fd (&vnc_pw_buffer->release_syncobj_fd, NULL);
+  g_free (vnc_pw_buffer);
+}
+
+static void
+grd_vnc_pw_buffer_queue_pw_buffer (GrdVncPwBuffer *vnc_pw_buffer)
+{
+  if (vnc_pw_buffer->release_syncobj_fd != -1 &&
+      vnc_pw_buffer->needs_release)
+    {
+      int release_syncobj_fd = vnc_pw_buffer->release_syncobj_fd;
+      uint64_t release_timeline_point = vnc_pw_buffer->release_point;
+      g_autoptr (GError) error = NULL;
+
+      if (!grd_signal_drm_timeline_point (vnc_pw_buffer->device_fd,
+                                          release_syncobj_fd,
+                                          release_timeline_point,
+                                          &error))
+        g_warning ("Failed to signal release point: %s", error->message);
+
+      vnc_pw_buffer->needs_release = FALSE;
+    }
+
+  pw_stream_queue_buffer (vnc_pw_buffer->pw_stream, vnc_pw_buffer->pw_buffer);
+}
+
+static GrdVncPwBuffer *
 acquire_pipewire_buffer_lock (GrdVncPipeWireStream *stream,
                               struct pw_buffer     *buffer)
 {
-  BufferContext *buffer_context = NULL;
+  GrdVncPwBuffer *vnc_pw_buffer = NULL;
 
   if (!g_hash_table_lookup_extended (stream->pipewire_buffers, buffer,
-                                     NULL, (gpointer *) &buffer_context))
+                                     NULL, (gpointer *) &vnc_pw_buffer))
     g_assert_not_reached ();
 
-  g_mutex_lock (&buffer_context->buffer_mutex);
-  g_assert (!buffer_context->is_locked);
-  buffer_context->is_locked = TRUE;
+  g_mutex_lock (&vnc_pw_buffer->buffer_mutex);
+  g_assert (!vnc_pw_buffer->is_locked);
+  vnc_pw_buffer->is_locked = TRUE;
+
+  return vnc_pw_buffer;
 }
 
 static void
 maybe_release_pipewire_buffer_lock (GrdVncPipeWireStream *stream,
                                     struct pw_buffer     *buffer)
 {
-  BufferContext *buffer_context = NULL;
+  GrdVncPwBuffer *vnc_pw_buffer = NULL;
 
   if (!g_hash_table_lookup_extended (stream->pipewire_buffers, buffer,
-                                     NULL, (gpointer *) &buffer_context))
+                                     NULL, (gpointer *) &vnc_pw_buffer))
     g_assert_not_reached ();
 
-  if (!buffer_context->is_locked)
+  if (!vnc_pw_buffer->is_locked)
     return;
 
-  buffer_context->is_locked = FALSE;
-  g_mutex_unlock (&buffer_context->buffer_mutex);
+  vnc_pw_buffer->is_locked = FALSE;
+  g_mutex_unlock (&vnc_pw_buffer->buffer_mutex);
 }
 
 static void
@@ -230,12 +326,11 @@ add_common_format_params (struct spa_pod_builder     *pod_builder,
                                                       &max_framerate), 0);
 }
 
-static uint32_t
-add_format_params (GrdVncPipeWireStream        *stream,
-                   const GrdVncVirtualMonitor  *virtual_monitor,
-                   struct spa_pod_builder      *pod_builder,
-                   const struct spa_pod       **params,
-                   uint32_t                     n_available_params)
+static void
+add_format_params (GrdVncPipeWireStream       *stream,
+                   const GrdVncVirtualMonitor *virtual_monitor,
+                   struct spa_pod_builder     *pod_builder,
+                   GArray                     *pod_offsets)
 {
   GrdSession *session = GRD_SESSION (stream->session);
   GrdContext *context = grd_session_get_context (session);
@@ -243,10 +338,8 @@ add_format_params (GrdVncPipeWireStream        *stream,
   struct spa_pod_frame format_frame;
   enum spa_video_format spa_format = SPA_VIDEO_FORMAT_BGRx;
   gboolean need_fallback_format = FALSE;
-  uint32_t n_params = 0;
 
-  g_assert (n_available_params >= 2);
-
+  grd_append_pod_offset (pod_offsets, pod_builder);
   spa_pod_builder_push_object (pod_builder, &format_frame,
                                SPA_TYPE_OBJECT_Format,
                                SPA_PARAM_EnumFormat);
@@ -288,36 +381,40 @@ add_format_params (GrdVncPipeWireStream        *stream,
         }
     }
 
-  params[n_params++] = spa_pod_builder_pop (pod_builder, &format_frame);
+  spa_pod_builder_pop (pod_builder, &format_frame);
 
   if (need_fallback_format)
     {
+      grd_append_pod_offset (pod_offsets, pod_builder);
       spa_pod_builder_push_object (pod_builder, &format_frame,
                                    SPA_TYPE_OBJECT_Format,
                                    SPA_PARAM_EnumFormat);
-      add_common_format_params (pod_builder, spa_format, virtual_monitor);
-      params[n_params++] = spa_pod_builder_pop (pod_builder, &format_frame);
+      add_common_format_params (pod_builder, spa_format,
+                                virtual_monitor);
+      spa_pod_builder_pop (pod_builder, &format_frame);
     }
-
-  return n_params;
 }
 
 void
 grd_vnc_pipewire_stream_resize (GrdVncPipeWireStream *stream,
                                 GrdVncVirtualMonitor *virtual_monitor)
 {
-  uint8_t params_buffer[1024];
-  struct spa_pod_builder pod_builder;
-  const struct spa_pod *params[MAX_FORMAT_PARAMS] = {};
-  uint32_t n_params = 0;
+  g_autoptr (GArray) pod_offsets = NULL;
+  struct spa_pod_dynamic_builder pod_builder;
+  g_autoptr (GPtrArray) params = NULL;
 
-  pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
+  pod_offsets = g_array_new (FALSE, FALSE, sizeof (uint32_t));
+  spa_pod_dynamic_builder_init (&pod_builder, NULL, 0, PARAMS_BUFFER_SIZE);
 
-  n_params += add_format_params (stream, virtual_monitor, &pod_builder,
-                                 params, MAX_FORMAT_PARAMS);
+  add_format_params (stream, virtual_monitor,
+                     &pod_builder.b, pod_offsets);
 
-  g_assert (n_params > 0);
-  pw_stream_update_params (stream->pipewire_stream, params, n_params);
+  params = grd_finish_pipewire_params (&pod_builder.b, pod_offsets);
+  pw_stream_update_params (stream->pipewire_stream,
+                           (const struct spa_pod **) params->pdata,
+                           params->len);
+
+  spa_pod_dynamic_builder_clean (&pod_builder);
 }
 
 static void
@@ -351,12 +448,14 @@ on_stream_param_changed (void                 *user_data,
   GrdVncPipeWireStream *stream = GRD_VNC_PIPEWIRE_STREAM (user_data);
   GrdSession *session = GRD_SESSION (stream->session);
   GrdContext *context = grd_session_get_context (session);
-  uint8_t params_buffer[1024];
-  struct spa_pod_builder pod_builder;
+  GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
   int width;
   int height;
   enum spa_data_type allowed_buffer_types;
-  const struct spa_pod *params[3];
+  g_autoptr (GArray) pod_offsets = NULL;
+  struct spa_pod_dynamic_builder pod_builder;
+  struct spa_pod_frame buffers_frame;
+  g_autoptr (GPtrArray) params = NULL;
 
   if (grd_session_vnc_is_client_gone (stream->session))
     return;
@@ -366,7 +465,8 @@ on_stream_param_changed (void                 *user_data,
 
   spa_format_video_raw_parse (format, &stream->spa_format);
 
-  pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
+  pod_offsets = g_array_new (FALSE, FALSE, sizeof (uint32_t));
+  spa_pod_dynamic_builder_init (&pod_builder, NULL, 0, PARAMS_BUFFER_SIZE);
 
   width = stream->spa_format.size.width;
   height = stream->spa_format.size.height;
@@ -380,22 +480,34 @@ on_stream_param_changed (void                 *user_data,
   if (grd_context_get_egl_thread (context))
     allowed_buffer_types |= 1 << SPA_DATA_DmaBuf;
 
-  params[0] = spa_pod_builder_add_object (
-    &pod_builder,
-    SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
+  grd_append_pod_offset (pod_offsets, &pod_builder.b);
+  spa_pod_builder_push_object (&pod_builder.b, &buffers_frame,
+                               SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers);
+  spa_pod_builder_add (
+    &pod_builder.b,
     SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int (8, 1, 8),
     SPA_PARAM_BUFFERS_dataType, SPA_POD_Int (allowed_buffer_types),
     0);
+  if (egl_thread && grd_egl_thread_supports_explicit_sync (egl_thread))
+    {
+      spa_pod_builder_prop (&pod_builder.b,
+                            SPA_PARAM_BUFFERS_metaType,
+                            SPA_POD_PROP_FLAG_MANDATORY);
+      spa_pod_builder_int (&pod_builder.b, 1 << SPA_META_SyncTimeline);
+    }
+  spa_pod_builder_pop (&pod_builder.b, &buffers_frame);
 
-  params[1] = spa_pod_builder_add_object (
-    &pod_builder,
+  grd_append_pod_offset (pod_offsets, &pod_builder.b);
+  spa_pod_builder_add_object (
+    &pod_builder.b,
     SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
     SPA_PARAM_META_type, SPA_POD_Id (SPA_META_Header),
     SPA_PARAM_META_size, SPA_POD_Int (sizeof (struct spa_meta_header)),
     0);
 
-  params[2] = spa_pod_builder_add_object(
-    &pod_builder,
+  grd_append_pod_offset (pod_offsets, &pod_builder.b);
+  spa_pod_builder_add_object(
+    &pod_builder.b,
     SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
     SPA_PARAM_META_type, SPA_POD_Id (SPA_META_Cursor),
     SPA_PARAM_META_size, SPA_POD_CHOICE_RANGE_Int (CURSOR_META_SIZE (384, 384),
@@ -403,8 +515,22 @@ on_stream_param_changed (void                 *user_data,
                                                    CURSOR_META_SIZE (384, 384)),
     0);
 
+  if (egl_thread && grd_egl_thread_supports_explicit_sync (egl_thread))
+    {
+      grd_append_pod_offset (pod_offsets, &pod_builder.b);
+      spa_pod_builder_add_object
+        (&pod_builder.b,
+         SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
+         SPA_PARAM_META_type, SPA_POD_Id (SPA_META_SyncTimeline),
+         SPA_PARAM_META_size, SPA_POD_Int (sizeof (struct spa_meta_sync_timeline)));
+    }
+
+  params = grd_finish_pipewire_params (&pod_builder.b, pod_offsets);
   pw_stream_update_params (stream->pipewire_stream,
-                           params, G_N_ELEMENTS (params));
+                           (const struct spa_pod **) params->pdata,
+                           params->len);
+
+  spa_pod_dynamic_builder_clean (&pod_builder);
 }
 
 static void
@@ -412,8 +538,29 @@ on_stream_add_buffer (void             *user_data,
                       struct pw_buffer *buffer)
 {
   GrdVncPipeWireStream *stream = user_data;
+  GrdSession *session = GRD_SESSION (stream->session);
+  GrdContext *context = grd_session_get_context (session);
+  GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
+  int device_fd = -1;
+  GrdVncPwBuffer *vnc_pw_buffer;
+  g_autoptr (GError) error = NULL;
 
-  g_hash_table_insert (stream->pipewire_buffers, buffer, buffer_context_new ());
+  if (egl_thread)
+    device_fd = grd_egl_thread_get_render_node_fd (egl_thread);
+
+  vnc_pw_buffer = grd_vnc_pw_buffer_new (stream->pipewire_stream,
+                                         buffer,
+                                         device_fd,
+                                         &error);
+  if (!vnc_pw_buffer)
+    {
+      g_warning ("Failed to create VNC buffer object: %s", error->message);
+      stream->dequeuing_disallowed = TRUE;
+      grd_session_vnc_notify_error (stream->session);
+      return;
+    }
+
+  g_hash_table_insert (stream->pipewire_buffers, buffer, vnc_pw_buffer);
 }
 
 static void
@@ -421,18 +568,18 @@ on_stream_remove_buffer (void             *user_data,
                          struct pw_buffer *buffer)
 {
   GrdVncPipeWireStream *stream = user_data;
-  BufferContext *buffer_context = NULL;
+  GrdVncPwBuffer *vnc_pw_buffer = NULL;
   g_autoptr (GMutexLocker) locker = NULL;
 
   if (!g_hash_table_lookup_extended (stream->pipewire_buffers, buffer,
-                                     NULL, (gpointer *) &buffer_context))
+                                     NULL, (gpointer *) &vnc_pw_buffer))
     g_assert_not_reached ();
 
   locker = g_mutex_locker_new (&stream->dequeue_mutex);
 
   /* Ensure buffer is not locked any more */
-  g_mutex_lock (&buffer_context->buffer_mutex);
-  g_mutex_unlock (&buffer_context->buffer_mutex);
+  g_mutex_lock (&vnc_pw_buffer->buffer_mutex);
+  g_mutex_unlock (&vnc_pw_buffer->buffer_mutex);
 
   g_hash_table_remove (stream->pipewire_buffers, buffer);
 }
@@ -589,6 +736,19 @@ process_mouse_pointer_bitmap (GrdVncPipeWireStream  *stream,
 }
 
 static void
+queue_buffer (GrdVncPipeWireStream *stream,
+              struct pw_buffer     *pw_buffer)
+{
+  GrdVncPwBuffer *vnc_pw_buffer = NULL;
+
+  if (!g_hash_table_lookup_extended (stream->pipewire_buffers, pw_buffer,
+                                     NULL, (gpointer *) &vnc_pw_buffer))
+    g_assert_not_reached ();
+
+  grd_vnc_pw_buffer_queue_pw_buffer (vnc_pw_buffer);
+}
+
+static void
 on_frame_ready (GrdVncPipeWireStream *stream,
                 GrdVncFrame          *frame,
                 gboolean              success,
@@ -610,7 +770,7 @@ on_frame_ready (GrdVncPipeWireStream *stream,
 
   g_source_set_ready_time (stream->pending_frame_source, 0);
 out:
-  pw_stream_queue_buffer (stream->pipewire_stream, buffer);
+  queue_buffer (stream, buffer);
   maybe_release_pipewire_buffer_lock (stream, buffer);
 
   g_clear_pointer (&frame, grd_vnc_frame_unref);
@@ -646,6 +806,20 @@ on_dma_buf_downloaded (gboolean success,
                    frame,
                    success,
                    frame->callback_user_data);
+}
+
+static size_t
+count_planes (struct spa_buffer *spa_buffer)
+{
+  size_t i;
+
+  for (i = 0; i < spa_buffer->n_datas; i++)
+    {
+      if (spa_buffer->datas[i].type != SPA_DATA_DmaBuf)
+        return i;
+    }
+
+  return i;
 }
 
 static void
@@ -707,6 +881,7 @@ process_frame_data (GrdVncPipeWireStream *stream,
       GrdSession *session = GRD_SESSION (stream->session);
       GrdContext *context = grd_session_get_context (session);
       GrdEglThread *egl_thread = grd_context_get_egl_thread (context);
+      GrdVncPwBuffer *vnc_pw_buffer;
       int row_width;
       int *fds;
       uint32_t *offsets;
@@ -718,7 +893,7 @@ process_frame_data (GrdVncPipeWireStream *stream,
 
       row_width = dst_stride / bpp;
 
-      n_planes = buffer->n_datas;
+      n_planes = count_planes (buffer);
       fds = g_alloca (sizeof (int) * n_planes);
       offsets = g_alloca (sizeof (uint32_t) * n_planes);
       strides = g_alloca (sizeof (uint32_t) * n_planes);
@@ -736,7 +911,7 @@ process_frame_data (GrdVncPipeWireStream *stream,
       dst_data = g_malloc0 (height * dst_stride);
       frame->data = dst_data;
 
-      acquire_pipewire_buffer_lock (stream, pw_buffer);
+      vnc_pw_buffer = acquire_pipewire_buffer_lock (stream, pw_buffer);
       grd_egl_thread_download (egl_thread,
                                stream->egl_slot,
                                dst_data,
@@ -748,6 +923,8 @@ process_frame_data (GrdVncPipeWireStream *stream,
                                strides,
                                offsets,
                                modifiers,
+                               vnc_pw_buffer->acquire_syncobj_fd,
+                               vnc_pw_buffer->acquire_point,
                                on_dma_buf_downloaded,
                                grd_vnc_frame_ref (g_steal_pointer (&frame)),
                                (GDestroyNotify) grd_vnc_frame_unref);
@@ -792,6 +969,19 @@ maybe_consume_pointer_position (struct pw_buffer *buffer,
 }
 
 static void
+update_timeline_points (GrdVncPipeWireStream *stream,
+                        struct pw_buffer     *pw_buffer)
+{
+  GrdVncPwBuffer *vnc_pw_buffer = NULL;
+
+  if (!g_hash_table_lookup_extended (stream->pipewire_buffers, pw_buffer,
+                                     NULL, (gpointer *) &vnc_pw_buffer))
+    g_assert_not_reached ();
+
+  grd_vnc_pw_buffer_update_timeline_points (vnc_pw_buffer);
+}
+
+static void
 on_stream_process (void *user_data)
 {
   GrdVncPipeWireStream *stream = GRD_VNC_PIPEWIRE_STREAM (user_data);
@@ -813,13 +1003,15 @@ on_stream_process (void *user_data)
     {
       struct spa_meta_header *spa_meta_header;
 
+      update_timeline_points (stream, next_buffer);
+
       spa_meta_header = spa_buffer_find_meta_data (next_buffer->buffer,
                                                    SPA_META_Header,
                                                    sizeof (struct spa_meta_header));
       if (spa_meta_header &&
           spa_meta_header->flags & SPA_META_HEADER_FLAG_CORRUPTED)
         {
-          pw_stream_queue_buffer (stream->pipewire_stream, next_buffer);
+          queue_buffer (stream, next_buffer);
           continue;
         }
 
@@ -832,7 +1024,7 @@ on_stream_process (void *user_data)
             last_pointer_buffer = NULL;
 
           if (last_pointer_buffer)
-            pw_stream_queue_buffer (stream->pipewire_stream, last_pointer_buffer);
+            queue_buffer (stream, last_pointer_buffer);
           last_pointer_buffer = next_buffer;
         }
       if (grd_pipewire_buffer_has_frame_data (next_buffer))
@@ -841,13 +1033,13 @@ on_stream_process (void *user_data)
             last_frame_buffer = NULL;
 
           if (last_frame_buffer)
-            pw_stream_queue_buffer (stream->pipewire_stream, last_frame_buffer);
+            queue_buffer (stream, last_frame_buffer);
           last_frame_buffer = next_buffer;
         }
 
       if (next_buffer != last_pointer_buffer &&
           next_buffer != last_frame_buffer)
-        pw_stream_queue_buffer (stream->pipewire_stream, next_buffer);
+        queue_buffer (stream, next_buffer);
     }
   if (!last_pointer_buffer && !last_frame_buffer && !cursor_moved)
     return;
@@ -865,7 +1057,7 @@ on_stream_process (void *user_data)
       process_mouse_pointer_bitmap (stream, last_pointer_buffer->buffer,
                                     &vnc_pointer);
       if (last_pointer_buffer != last_frame_buffer)
-        pw_stream_queue_buffer (stream->pipewire_stream, last_pointer_buffer);
+        queue_buffer (stream, last_pointer_buffer);
     }
   if (vnc_pointer)
     {
@@ -898,20 +1090,21 @@ connect_to_stream (GrdVncPipeWireStream        *stream,
                    GError                     **error)
 {
   struct pw_stream *pipewire_stream;
-  uint8_t params_buffer[1024];
-  struct spa_pod_builder pod_builder;
-  const struct spa_pod *params[MAX_FORMAT_PARAMS] = {};
-  uint32_t n_params = 0;
+  g_autoptr (GArray) pod_offsets = NULL;
+  struct spa_pod_dynamic_builder pod_builder;
+  g_autoptr (GPtrArray) params = NULL;
   int ret;
 
   pipewire_stream = pw_stream_new (stream->pipewire_core,
                                    "grd-vnc-pipewire-stream",
                                    NULL);
 
-  pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
+  pod_offsets = g_array_new (FALSE, FALSE, sizeof (uint32_t));
+  spa_pod_dynamic_builder_init (&pod_builder, NULL, 0, PARAMS_BUFFER_SIZE);
 
-  n_params += add_format_params (stream, virtual_monitor, &pod_builder,
-                                 params, MAX_FORMAT_PARAMS);
+  add_format_params (stream, virtual_monitor, &pod_builder.b, pod_offsets);
+
+  params = grd_finish_pipewire_params (&pod_builder.b, pod_offsets);
 
   stream->pipewire_stream = pipewire_stream;
 
@@ -920,13 +1113,16 @@ connect_to_stream (GrdVncPipeWireStream        *stream,
                           &stream_events,
                           stream);
 
-  g_assert (n_params > 0);
   ret = pw_stream_connect (stream->pipewire_stream,
                            PW_DIRECTION_INPUT,
                            stream->src_node_id,
                            (PW_STREAM_FLAG_RT_PROCESS |
                             PW_STREAM_FLAG_AUTOCONNECT),
-                           params, n_params);
+                           (const struct spa_pod **) params->pdata,
+                           params->len);
+
+  spa_pod_dynamic_builder_clean (&pod_builder);
+
   if (ret < 0)
     {
       g_set_error_literal (error, G_IO_ERROR, g_io_error_from_errno (-ret),
@@ -1092,7 +1288,7 @@ grd_vnc_pipewire_stream_init (GrdVncPipeWireStream *stream)
 {
   stream->pipewire_buffers =
     g_hash_table_new_full (NULL, NULL,
-                           NULL, (GDestroyNotify) buffer_context_free);
+                           NULL, (GDestroyNotify) grd_vnc_pw_buffer_free);
 
   g_mutex_init (&stream->dequeue_mutex);
   g_mutex_init (&stream->frame_mutex);
