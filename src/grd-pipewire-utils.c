@@ -205,3 +205,56 @@ grd_get_spa_format_details (enum spa_video_format  spa_format,
 
   g_assert_not_reached ();
 }
+
+void
+grd_append_pod_offset (GArray                 *pod_offsets,
+                       struct spa_pod_builder *pod_builder)
+{
+  g_array_append_val (pod_offsets, pod_builder->state.offset);
+}
+
+GPtrArray *
+grd_finish_pipewire_params (struct spa_pod_builder *pod_builder,
+                            GArray                 *pod_offsets)
+{
+  GPtrArray *params = NULL;
+  size_t i;
+
+  params = g_ptr_array_new ();
+
+  for (i = 0; i < pod_offsets->len; i++)
+    {
+      uint32_t pod_offset = g_array_index (pod_offsets, uint32_t, i);
+
+      g_ptr_array_add (params, spa_pod_builder_deref (pod_builder, pod_offset));
+    }
+
+  return params;
+}
+
+gboolean
+grd_spa_buffer_find_syncobj_fds (struct spa_buffer *spa_buffer,
+                                 int               *acquire_syncobj_fd,
+                                 int               *release_syncobj_fd)
+{
+  size_t i;
+
+  for (i = 0; i < spa_buffer->n_datas; i++)
+    {
+      if (spa_buffer->datas[i].type != SPA_DATA_SyncObj)
+        continue;
+
+      if (i == spa_buffer->n_datas - 1 ||
+          spa_buffer->datas[i + 1].type != SPA_DATA_SyncObj)
+        {
+          g_warning ("Missing release syncobj fd");
+          return FALSE;
+        }
+
+      *acquire_syncobj_fd = spa_buffer->datas[i].fd;
+      *release_syncobj_fd = spa_buffer->datas[i + 1].fd;
+      return TRUE;
+    }
+
+  return FALSE;
+}

@@ -37,6 +37,9 @@ typedef struct
   PFN_vkCmdPipelineBarrier2KHR vkCmdPipelineBarrier2KHR;
   PFN_vkCmdWriteTimestamp2KHR vkCmdWriteTimestamp2KHR;
   PFN_vkQueueSubmit2KHR vkQueueSubmit2KHR;
+
+  /* VK_KHR_external_semaphore_fd */
+  PFN_vkImportSemaphoreFdKHR vkImportSemaphoreFdKHR;
 } GrdVkDeviceFuncs;
 
 typedef struct
@@ -53,6 +56,8 @@ GrdVkPhysicalDevice *grd_vk_device_get_physical_device (GrdVkDevice *device);
 VkDevice grd_vk_device_get_device (GrdVkDevice *device);
 
 VkPipelineCache grd_vk_device_get_pipeline_cache (GrdVkDevice *device);
+
+int grd_vk_device_get_drm_render_node_fd (GrdVkDevice *device);
 
 float grd_vk_device_get_timestamp_period (GrdVkDevice *device);
 
