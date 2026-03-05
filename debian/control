@@ -57,7 +57,8 @@ Depends: fuse3,
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: libmutter-17-0 | libmutter-18-0
-Breaks: gnome-control-center (<< 1:42)
+Breaks: gnome-control-center (<< 1:42),
+        gdm3 (<< 50~rc)
 Description: Remote desktop daemon for GNOME using PipeWire
  This daemon enables GNOME to offer remote desktop sharing and control
  using RDP with PipeWire. It supports GNOME on both X11 and Wayland.
