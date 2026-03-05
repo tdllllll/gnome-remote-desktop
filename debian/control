@@ -1,6 +1,7 @@
 Source: gnome-remote-desktop
 Section: gnome
-Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
 Uploaders: Amin Bandali <bandali@ubuntu.com>,
            Jeremy Bícha <jbicha@ubuntu.com>,
            Marco Trevisan (Treviño) <marco@ubuntu.com>

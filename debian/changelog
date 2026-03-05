@@ -1,4 +1,4 @@
-gnome-remote-desktop (50~rc-1) UNRELEASED; urgency=medium
+gnome-remote-desktop (50~rc-0ubuntu1) resolute; urgency=medium
 
   * New upstream release
   * Refresh patches
