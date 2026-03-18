@@ -1,3 +1,13 @@
+gnome-remote-desktop (50.0-0ubuntu1) resolute; urgency=medium
+
+  * New upstream release
+  * Refresh patches
+  * d/p/tests-rdp-Ignore-cursor-updates-when-checking-for-the-scr.patch:
+    - Add upstream patch to workaround gnome-remote-desktop/rdp test
+      flakiness.
+
+ -- Charles <charles05@canonical.com>  Mon, 16 Mar 2026 08:59:26 +0000
+
 gnome-remote-desktop (50~rc-0ubuntu1) resolute; urgency=medium
 
   * New upstream release
