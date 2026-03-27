@@ -1,3 +1,10 @@
+gnome-remote-desktop (50.0-0ubuntu2) resolute; urgency=medium
+
+  * Cherry-pick patch to fix black screen issues on RDP with NVIDIA
+    GPUs. (LP: #2145123)
+
+ -- Charles <charles05@canonical.com>  Fri, 27 Mar 2026 08:52:01 +0000
+
 gnome-remote-desktop (50.0-0ubuntu1) resolute; urgency=medium
 
   * New upstream release
