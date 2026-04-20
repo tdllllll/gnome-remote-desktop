@@ -1,68 +1,71 @@
-# Polish translation for gnome-remote-desktop.
-# Copyright © 2021-2025 the gnome-remote-desktop authors.
+# Cornish translation for gnome-remote-desktop.
+# Copyright (C) 2026 gnome-remote-desktop's COPYRIGHT HOLDER
 # This file is distributed under the same license as the gnome-remote-desktop package.
-# Piotr Drąg <piotrdrag@gmail.com>, 2021-2025.
-# Aviary.pl <community-poland@mozilla.org>, 2021-2025.
-# Daniel <wbcwknvstb@proton.me>, 2026.
-# Victoria Niedzielska <victorian@gnome.org>, 2026.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# Flynn Peck <cirilla@tuta.io>, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: gnome-remote-desktop\n"
+"Project-Id-Version: gnome-remote-desktop master\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/"
 "issues/\n"
 "POT-Creation-Date: 2026-02-26 11:26+0000\n"
-"PO-Revision-Date: 2026-03-28 15:41+0100\n"
-"Last-Translator: Victoria Niedzielska <victorian@gnome.org>\n"
-"Language-Team: Polish <https://l10n.gnome.org/teams/pl/>\n"
-"Language: pl\n"
+"PO-Revision-Date: 2026-03-22 17:47+0000\n"
+"Last-Translator: Flynn Peck <cirilla@tuta.io>\n"
+"Language-Team: kw\n"
+"Language: kw\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
-"|| n%100>=20) ? 1 : 2);\n"
+"X-DL-VCS-Web: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/\n"
+"X-DL-Lang: kw\n"
+"X-DL-Module: gnome-remote-desktop\n"
+"X-DL-Branch: main\n"
+"X-DL-Domain: po\n"
+"X-DL-State: Translating\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Gtranslator 50.0\n"
 
 #: data/org.gnome.remotedesktop.configure-system-daemon.policy.in:11
 msgid "Allow to configure gnome-remote-desktop's system daemon settings"
-msgstr "Skonfigurowanie ustawień systemowej usługi zdalnego pulpitu GNOME"
+msgstr "Gasa selya an settyansow daemon system gnome-remote-desktop "
 
 #: data/org.gnome.remotedesktop.configure-system-daemon.policy.in:12
 msgid ""
 "Authentication is required to configure gnome-remote-desktop's system daemon "
 "settings"
 msgstr ""
-"Wymagane jest uwierzytelnienie, aby skonfigurować ustawienia systemowej "
-"usługi zdalnego pulpitu GNOME"
+"Omgelmyans a res rag selya an settyansow daemon system gnome-remote-desktop"
 
 #: data/org.gnome.remotedesktop.enable-system-daemon.policy.in:11
 msgid "Allow to enable and disable gnome-remote-desktop's system daemon"
-msgstr "Włączanie i wyłączanie systemowej usługi zdalnego pulpitu GNOME"
+msgstr ""
+"Gasa rag gallosegi hag ungallosegi an daemon system gnome-remote-desktop"
 
 #: data/org.gnome.remotedesktop.enable-system-daemon.policy.in:12
 msgid ""
 "Authentication is required to enable or disable gnome-remote-desktop's "
 "system daemon"
 msgstr ""
-"Wymagane jest uwierzytelnienie, aby włączyć lub wyłączyć systemową usługę "
-"zdalnego pulpitu GNOME"
+"Omgelmyans a res rag gallosegi po ungallosegi an daemon system gnome-remote-"
+"desktop"
 
 #: src/grd-ctl.c:72
 #, c-format
 msgid "Usage: %s [OPTIONS...] COMMAND [SUBCOMMAND]...\n"
-msgstr "Użycie: %s [OPCJE…] POLECENIE [PODPOLECENIE]…\n"
+msgstr "Usadow: %s [DEWISYOW...] ARGHADOW [ISARGHADOW]...\n"
 
 #: src/grd-ctl.c:382
 msgid "Username: "
-msgstr "Nazwa osoby: "
+msgstr "Hanow usyer:"
 
 #: src/grd-ctl.c:394 src/grd-ctl.c:552
 msgid "Password: "
-msgstr "Hasło: "
+msgstr "Ger-tremena:"
 
 #: src/grd-ctl.c:682
 msgid "Commands:\n"
-msgstr "Polecenia:\n"
+msgstr "Arghadow:\n"
 
 #: src/grd-ctl.c:687
 msgid ""
@@ -101,33 +104,34 @@ msgid ""
 "                                                   to a different port\n"
 "\n"
 msgstr ""
-"  rdp                                           Podpolecenia RDP:\n"
-"    set-port                                  — ustawia port, do którego\n"
-"                                                dowiązuje serwer\n"
-"    enable                                    — włącza mechanizm RDP\n"
-"    disable                                   — wyłącza mechanizm RDP\n"
-"    set-auth-methods <lista-metod>            — ustawia listę dozwolonych "
-"metod\n"
-"                                                uwierzytelniania rozdzieloną "
-"przecinkami\n"
-"    set-tls-cert <ścieżka-do-certyfikatu>     — ustawia ścieżkę do\n"
-"                                                certyfikatu TLS\n"
-"    set-tls-key <ścieżka-do-klucza>           — ustawia ścieżkę do\n"
-"                                                klucza TLS\n"
-"    set-kerberos-keytab <ścieżka-do-tablicy-kluczy> — ustawia ścieżkę do\n"
-"                                                      tablicy kluczy\n"
-"    set-credentials [<nazwa-osoby> [<hasło>]] — ustawia nazwę osoby\n"
-"                                                i hasło\n"
-"    clear-credentials                         — czyści nazwę osoby\n"
-"                                                i hasło\n"
-"    enable-view-only                          — wyłącza zdalne sterowanie\n"
-"                                                urządzeniami wejściowymi\n"
-"    disable-view-only                         — włącza zdalne sterowanie\n"
-"                                                urządzeniami wejściowymi\n"
-"    enable-port-negotiation                   — jeśli jest niedostępny,\n"
-"                                                nasłuchuje na innym porcie\n"
-"    disable-port-negotiation                  — jeśli jest niedostępny, nie\n"
-"                                                nasłuchuje na innym porcie\n"
+"  rdp                                            - isarghadow RDP:\n"
+"    set-port                                     - Gorra porth an servell "
+"junya dhe\n"
+"    enable                                       - Bywhe RDP\n"
+"    disable                                      - Marowhe RDP\n"
+"    set-auth-methods <list-of-methods>           - Gorra rol diberthys gans "
+"kommas a\n"
+"                                                   vethodys omgelmans gesys\n"
+"                                                   (manylyon, kerberos)\n"
+"    set-tls-cert <path-to-cert>                  - Gorra tyller testskrif "
+"TLS\n"
+"    set-tls-key <path-to-key>                    - Gorra tyller alhwedh TLS\n"
+"    set-credentials [<username> [<password>]]    - Gorra hanow usyer ha ger-"
+"tremena\n"
+"    clear-credentials                            - Dilea hanow usyer ha ger-"
+"tremena\n"
+"    enable-view-only                             - Ungallosegi routyans pell "
+"devisyow\n"
+"                                                   ynworrans\n"
+"    disable-view-only                            - Ungallosegi routyans pell "
+"devisyow\n"
+"                                                   ynworrans\n"
+"    enable-port-negotiation                      - Mar ankavadow, goslowes "
+"orth\n"
+"                                                   unn porth aral\n"
+"    disable-port-negotiation                     - Mar ankavadow, na "
+"goslowes\n"
+"                                                   orth unn porth aral\n"
 "\n"
 
 #: src/grd-ctl.c:715
@@ -151,22 +155,24 @@ msgid ""
 "                                               to a different port\n"
 "\n"
 msgstr ""
-"  vnc                                          Podpolecenia VNC:\n"
-"    set-port                                 — ustawia port, do którego\n"
-"                                               dowiązuje serwer\n"
-"    enable                                   — włącza mechanizm VNC\n"
-"    disable                                  — wyłącza mechanizm VNC\n"
-"    set-password [<hasło>]                   — ustawia hasło VNC\n"
-"    clear-password                           — czyści hasło VNC\n"
-"    set-auth-method password|prompt          — ustawia metodę upoważniania\n"
-"    enable-view-only                         — wyłącza zdalne sterowanie\n"
-"                                               urządzeniami wejściowymi\n"
-"    disable-view-only                        — włącza zdalne sterowanie\n"
-"                                               urządzeniami wejściowymi\n"
-"    enable-port-negotiation                  — jeśli jest niedostępny,\n"
-"                                               nasłuchuje na innym porcie\n"
-"    disable-port-negotiation                 — jeśli jest niedostępny, nie\n"
-"                                               nasłuchuje na innym porcie\n"
+"  vnc                                        - isarghadow VNC:\n"
+"    set-port                                 - Gorra porth an servell junya "
+"dhe\n"
+"    enable                                   - Gallosegi VNC\n"
+"    disable                                  - Ungallosegi VNC\n"
+"    set-password [<password>]                - Gorra an ger-tremena VNC\n"
+"    clear-password                           - Dilea an ger-tremena VNC\n"
+"    set-auth-method password|prompt          - Gorra an method reythheans\n"
+"    enable-view-only                         - Ungallosegi routyans pell "
+"devisyow\n"
+"                                               ynworrans\n"
+"    disable-view-only                        - Gallosegi routyans pell "
+"devisyow\n"
+"                                               ynworrans\n"
+"    enable-port-negotiation                  - Mar ankavadow, goslowes orth\n"
+"                                               unn porth aral\n"
+"    disable-port-negotiation                 - Mar ankavadow, na goslowes\n"
+"                                               orth unn porth aral\n"
 "\n"
 
 #: src/grd-ctl.c:735
@@ -180,24 +186,24 @@ msgid ""
 "                                               for remote login\n"
 "  --help                                     - Print this help text\n"
 msgstr ""
-"  status [--show-credentials]                — wyświetla obecny stan\n"
+"  status [--show-credentials]                - Diskwedhes studh a-lemmyn\n"
 "\n"
-"Options:\n"
-"  --headless                                 — konfiguruje usługę bez "
-"ekranu\n"
-"                                               działającą w sesji osoby\n"
-"  --system                                   — konfiguruje usługę systemową\n"
-"                                               do zdalnego logowania\n"
-"  --help                                     — wyświetla ten tekst pomocy\n"
+"Dewisyow:\n"
+"  --headless                                 - Selya daemon dipenn\n"
+"                                               owth eksekutya war unn "
+"esedhek usyer\n"
+"  --system                                   - Selya daemon system\n"
+"                                               rag omgelmyans pell\n"
+"  --help                                     - Pryntya an tekst gweres ma\n"
 
 #: src/grd-daemon.c:1165
 msgid "GNOME Remote Desktop"
-msgstr "Zdalny pulpit GNOME"
+msgstr "Pelldesktop GNOME"
 
 #: src/grd-daemon-handover.c:331 src/grd-daemon-handover.c:396
 #, c-format
 msgid "Continue With Insecure Connection?"
-msgstr "Kontynuować za pomocą niezabezpieczonego połączenia?"
+msgstr "Pesya gans Junyans Ansaw?"
 
 #. Translators: Don't translate “use redirection server name:i:1”.
 #. * It's a menu option, and it's the same for all languages.
@@ -208,25 +214,25 @@ msgid ""
 "enable RDSTLS Security in your client by saving the connection settings in "
 "your client as an RDP file and set “use redirection server name:i:1” in it."
 msgstr ""
-"To połączenie zdalnego pulpitu jest niezabezpieczone. Aby je zabezpieczyć, "
-"należy włączyć zabezpieczenie RDSTLS w kliencie przez zapisanie ustawień "
-"połączenia w kliencie jako plik RDP i ustawienie w nim „use redirection "
-"server name:i:1”."
+"An junyans Pelldesktop ma yw ansaw. Rag diogeli an junyans ma, gallosegi "
+"Diogeledh RDSTLS yn dha kliens gans ow sawya an settyansow junyans yn dha "
+"kliens avel unn restren RDP ha gorra “devnydhya servell daskevarwodhyans "
+"hanow:i:1” ynno."
 
 #: src/grd-daemon-handover.c:339 src/grd-daemon-handover.c:405
 #, c-format
 msgid "Disconnect"
-msgstr "Rozłącz"
+msgstr "Disjunya"
 
 #: src/grd-daemon-handover.c:340 src/grd-daemon-handover.c:406
 #, c-format
 msgid "Continue"
-msgstr "Kontynuuj"
+msgstr "Pesya"
 
 #: src/grd-daemon-user.c:99
 #, c-format
 msgid "Desktop Sharing port changed"
-msgstr "Port udostępniania pulpitu się zmienił"
+msgstr "Porth Ow Kevrenna Desktop chanjys"
 
 #: src/grd-daemon-user.c:101
 #, c-format
@@ -235,19 +241,19 @@ msgid ""
 "This is because the Remote Sessions service has been activated and it has a "
 "higher priority to use port <b>%i</b>."
 msgstr ""
-"Port udostępniania pulpitu zmienił się z <b>%i</b> na <b>%i</b>.\n"
-"Stało się tak, ponieważ usługa zdalnej sesji została aktywowana i ma wyższy "
-"priorytet do korzystania z portu <b>%i</b>."
+"An porth Ow Kevrenna Desktop yw chanjya dhyworth <b>%i</b> dhe <b>%i</b>.\n"
+"Ma yw drefen an gonis Esedhogow Pell yw bywhys hag yth kavos unn ragwir "
+"ughella rag devnydhya porth <b>%i</b>."
 
 #: src/grd-daemon-user.c:107 src/grd-session-vnc.c:323
 #, c-format
 msgid "Accept"
-msgstr "Zaakceptuj"
+msgstr "Receva"
 
 #: src/grd-session-vnc.c:318
 #, c-format
 msgid "Do you want to share your desktop?"
-msgstr "Udostępnić pulpit?"
+msgstr "A vynn'ta kevrenna dha desktop?"
 
 #: src/grd-session-vnc.c:320
 #, c-format
@@ -255,28 +261,29 @@ msgid ""
 "A user on the computer '%s' is trying to remotely view or control your "
 "desktop."
 msgstr ""
-"Osoba na komputerze „%s” chce zdalnie wyświetlać lub sterować pulpitem."
+"Unn usyer war an amontyell '%s' yw owth assaya gweles po routya pell dha "
+"desktop."
 
 #: src/grd-session-vnc.c:322
 #, c-format
 msgid "Refuse"
-msgstr "Odmów"
+msgstr "Nagha"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:7
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:101
 msgid "The port used by the RDP server"
-msgstr "Port używany przez serwer RDP"
+msgstr "An porth devnydhys gans an servell RDP"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:8
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:102
 msgid "The RDP client will connect to this port to use this RDP server."
 msgstr ""
-"Klient RDP będzie łączył się z tym portem, aby używać tego serwera RDP."
+"An kliens RDP a wra junya orth an porth ma rag devnydhya an servell RDP ma."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:14
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:108
 msgid "Search a different RDP port if the configured one is used"
-msgstr "Wyszukiwanie innego portu RDP, jeśli skonfigurowany jest zajęty"
+msgstr "Hwilas unn porth RDP aral mar an unn selys yw devnydhys"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:15
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:109
@@ -284,23 +291,22 @@ msgid ""
 "When negotiate-port is set to 'true' the RDP server will attempt to listen "
 "to the first available of the next 10 ports starting from the configured one."
 msgstr ""
-"Kiedy ustawienie „negotiate-port” jest włączone, serwer RDP będzie próbował "
-"nasłuchiwać pierwszego dostępnego z 10 następnych portów, zaczynając od "
-"skonfigurowanego."
+"Pan negotiate-port yw gorrys dhe 'true' an servell RDP a wra assaya goslowes "
+"orth an kynsa kavadow a'n porthow 10 nessa, ow dalleth dhyworth an unn selys."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:23
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:117
 msgid "Whether the RDP backend is enabled or not"
-msgstr "Czy mechanizm RDP jest włączony"
+msgstr "Po RDP yw byw po na"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:24
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:118
 msgid "If set to 'true' the RDP backend will be initialized."
-msgstr "Włączenie spowoduje inicjowanie mechanizmu RDP."
+msgstr "Mar gorra dhe 'true' RDP a wra bywhys."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:30
 msgid "Screenshare mode of RDP connections"
-msgstr "Tryb udostępniania ekranu połączeń RDP"
+msgstr "Fordh skrin-kevrenna a junyansow RDP"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:31
 msgid ""
@@ -317,22 +323,21 @@ msgid ""
 "resolution of this virtual monitor is derived from the monitor "
 "configuration, submitted by the remote desktop client."
 msgstr ""
-"Tryb udostępniania ekranu określa, czy mechanizm RDP pokazuje ten sam obraz "
-"co główny ekran, czy tworzony jest wirtualny monitor. Jako początkową "
-"rozdzielczość wirtualnego monitora mechanizm RDP używa danych rdzenia "
-"klienta ([MS-RDPBCGR] 2.2.1.3.2) lub danych monitora klienta ([MS-RDPBCGR] "
-"2.2.1.3.6), w zależności od dostępności. Podczas używania sesji zdalnego "
-"pulpitu z wirtualnym monitorem klienci mogą zmieniać jego rozdzielczość "
-"w trakcie sesji za pomocą rozszerzenia Display Update Virtual Channel "
-"Extension ([MS-RDPEDISP]). Dozwolone tryby udostępniania ekranu: • mirror-"
-"primary — nagrywa główny monitor bieżącej sesji osoby. • extend — tworzy "
-"nowy wirtualny monitor i używa go dla sesji zdalnego pulpitu. Rozdzielczość "
-"tego wirtualnego monitora pochodzi od konfiguracji monitora przesłanej przez "
-"klienta zdalnego pulpitu."
+"An fordh skrin-kevrenna ragnotya, po RDP diskwedhes an skrin chif, po unn "
+"skrin gowir yw gwrys. Rag an braster kynsa a'n skrin gowir, RDP devnydhya po "
+"an data kolonnen kliens ([MS-RDPBCGR] 2.2.1.3.2) po an data skrin kliens "
+"([MS-RDPBCGR] 2.2.1.3.6), ow kregi war pyth yw kavadow. Pan ow devnydhya unn "
+"esedhek pelldesktop gans unn skrin gowir, kliensow gallos chanjya an braster "
+"a'n skrin gowir dres unn esedhek gans an Display Update Virtual Channel "
+"Extension ([MS-RDPEDISP]). Fordhow skrin-kevrenna gasys komprehendya: * "
+"mirror-primary - Rekordya an skrin chif a'n esedhek usyer a-lemmyn. * extend "
+"- Gul unn skrin gowir nowydh ha devnydhya yth rag an esedhek pelldesktop. An "
+"braster a'n skrin gowir yw dhyworth an selyans skrin, danvonys gans an "
+"kliens pelldesktop."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:57
 msgid "Path to the certificate file"
-msgstr "Ścieżka do pliku certyfikatu"
+msgstr "Tyller dhe'n restren testskrif"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:58
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:66
@@ -340,30 +345,30 @@ msgid ""
 "In order to be able to use RDP with TLS Security, both the private key file "
 "and the certificate file need to be provided to the RDP server."
 msgstr ""
-"Aby używać RDP za pomocą zabezpieczeń TLS, plik klucza prywatnego i plik "
-"certyfikatu muszą zostać dostarczone do serwera RDP."
+"Rag devnydhya RDP gans Diogeledh TLS, an dhiw an restren alhwedh privedh hag "
+"an restren testskrif res bos provys dhe an servell RDP."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:65
 msgid "Path to the private key file"
-msgstr "Ścieżka do pliku klucza prywatnego"
+msgstr "Tyller dhe'n restren alhwedh privedh"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:73
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:167
 msgid "Only allow remote connections to view the screen content"
-msgstr "Zdalne połączenia mogą tylko wyświetlać zawartość ekranu"
+msgstr "Gasa junyans pell hepken gweles an dalgh skrin"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:74
 msgid ""
 "When view-only is true, remote RDP connections cannot manipulate input "
 "devices (e.g. mouse and keyboard)."
 msgstr ""
-"Po włączeniu zdalne połączenia RDP nie mogą korzystać z urządzeń wejściowych "
-"(np. myszy i klawiatury)."
+"Pan view-only yw gwir, junyansow RDP pell na gallos handla devisyow "
+"ynworrans (r.e logosen ha bysowek)."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:81
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:124
 msgid "Allowed authentication methods"
-msgstr "Dozwolone metody uwierzytelniania"
+msgstr "Methods omgelmans gesys"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:82
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:125
@@ -372,14 +377,13 @@ msgid ""
 "authentication mechanisms. At least one authentication method must be "
 "selected."
 msgstr ""
-"Dozwolone metody uwierzytelniania. Można wybrać wiele metod, aby umożliwić "
-"różne mechanizmy uwierzytelniania. Należy wybrać co najmniej jedną metodę "
-"uwierzytelniania."
+"Methods omgelmans gesys. Liesek a yll bos dewisys rag gasa jynnweythow "
+"omgelmans dyffrans. Dhe'n lyha, unn method res bos dewisys."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:90
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:133
 msgid "A path to a Kerberos keytab file"
-msgstr "Ścieżka do pliku tablicy kluczy Kerberos"
+msgstr "Tyller dhe restren alhwedhtabb Kerberos"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:91
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:134
@@ -387,25 +391,24 @@ msgid ""
 "When 'kerberos' is enabled as an authentication method, the TERMSRV Kerberos "
 "service principal in this keytab file will be used for authentication."
 msgstr ""
-"Jeśli włączono metodę uwierzytelniania „kerberos”, do uwierzytelniania "
-"zostanie wykorzystany podmiot usługi Kerberos TERMSRV z tego pliku tablicy "
-"kluczy."
+"Pan 'kerberos' yw byw avel method omgelmans, an gonis chif Kerberos TERMSRV "
+"y'n restren alhwedhentabb ma a wra bos devnydhys rag omgelmans."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:144
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:216
 msgid "The port used by the VNC server"
-msgstr "Port używany przez serwer VNC"
+msgstr "An porth devnydhys gans an servell VNC"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:145
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:217
 msgid "The VNC client will connect to this port to use this VNC server."
 msgstr ""
-"Klient VNC będzie łączył się z tym portem, aby używać tego serwera VNC."
+"An kliens VNC a wra junya orth an porth ma rag devnydhya an servell VNC ma."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:151
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:223
 msgid "Search a different VNC port if the configured one is used"
-msgstr "Wyszukiwanie innego portu VNC, jeśli skonfigurowany jest zajęty"
+msgstr "Hwilas unn porth VNC aral mar an unn selys yw devnydhys"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:152
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:224
@@ -413,31 +416,30 @@ msgid ""
 "When negotiate-port is set to 'true' the VNC server will attempt to listen "
 "to the first available of the next 10 ports starting from the configured one."
 msgstr ""
-"Kiedy ustawienie „negotiate-port” jest włączone, serwer VNC będzie próbował "
-"nasłuchiwać pierwszego dostępnego z 10 następnych portów, zaczynając od "
-"skonfigurowanego."
+"Pan negotiate-port yw gorrys dhe 'true' an servell VNC a wra assaya goslowes "
+"orth an kynsa kavadow a'n porthow 10 nessa, ow dalleth dhyworth an unn selys."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:160
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:232
 msgid "Whether the VNC backend is enabled or not"
-msgstr "Czy mechanizm VNC jest włączony"
+msgstr "Po VNC yw bywhys po na"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:161
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:233
 msgid "If set to 'true' the VNC backend will be initialized."
-msgstr "Włączenie spowoduje inicjowanie mechanizmu VNC."
+msgstr "Mar gorra dhe 'true' VNC a wra bos dallethys."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:168
 msgid ""
 "When view-only is true, remote VNC connections cannot manipulate input "
 "devices (e.g. mouse and keyboard)."
 msgstr ""
-"Po włączeniu zdalne połączenia VNC nie mogą korzystać z urządzeń wejściowych "
-"(np. myszy i klawiatury)."
+"Pan view-only yw gwir, junyansow VNC pell na gallos handla devisyow "
+"ynworrans (r.e. logosen ha bysowek)."
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:175
 msgid "Method used to authenticate VNC connections"
-msgstr "Metoda używana do uwierzytelniania połączeń VNC"
+msgstr "Method devnydhys rag gwirhe junyansow VNC"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:176
 msgid ""
@@ -447,15 +449,15 @@ msgid ""
 "access to the workstation to explicitly approve the new connection. * "
 "password - by requiring the remote client to provide a known password"
 msgstr ""
-"Metoda uwierzytelniania VNC opisuje, jak zdalne połączenie jest "
-"uwierzytelniane. Obecnie można to zrobić na dwa sposoby: • prompt (pytanie) "
-"— pytając osobę o każde nowe połączenie, przez co osoba z fizycznym dostępem "
-"do komputera musi zaakceptować nowe połączenie. • password (hasło) — "
-"wymagając od zdalnego klienta podania znanego hasła"
+"An method gwirheans VNC ow deskrifa fatel unn junyans pell yw gwirhys. Yth "
+"gallos bos gwrys a-lemmyn yn diw agwedhow dihaval: * prompt - gans ow "
+"lostleverel an usyer rag pub junyans nowydh, ow rekwirya unn den gans hedhas "
+"fisegel dhe'n amontyell dhe komendya diblans an junyans nowydh. * password - "
+"gans ow rekwirya an kliens pell dhe provia unn ger-tremena aswonys"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:188
 msgid "Screenshare mode of VNC connections"
-msgstr "Tryb udostępniania ekranu połączeń VNC"
+msgstr "Fordh skrin-kevrenna a junyansow VNC"
 
 #: src/org.gnome.desktop.remote-desktop.gschema.xml.in:189
 msgid ""
@@ -471,17 +473,16 @@ msgid ""
 "Clients can override the initial resolution with subsequent monitor "
 "configuration updates."
 msgstr ""
-"Tryb udostępniania ekranu określa, czy mechanizm VNC pokazuje ten sam obraz "
-"co główny ekran, czy tworzony jest wirtualny monitor. Jako początkową "
-"rozdzielczość wirtualnego monitora mechanizm VNC używa domyślnej wielkości "
-"1920×1080 pikseli. Podczas używania sesji zdalnego pulpitu z wirtualnym "
-"monitorem klienci mogą zmieniać jego rozdzielczość w trakcie sesji za pomocą "
-"PDU „setDesktopSize”. Dozwolone tryby udostępniania ekranu: • mirror-primary "
-"— nagrywa główny monitor bieżącej sesji osoby. • extend — tworzy nowy "
-"wirtualny monitor i używa go dla sesji zdalnego pulpitu. Początkowa "
-"rozdzielczość tego wirtualnego monitora jest ustawiona na 1920×1080 pikseli. "
-"Klienci mogą zastępować początkową rozdzielczość dalszymi aktualizacjami "
-"konfiguracji monitora."
+"An fordh skrin-kevrenna ragnotya, po VNC diskwedhes an skrin chif, po unn "
+"skrin gowir yw gwrys. Rag an braster kynsa a'n skrin gowir, VNC devnydhya an "
+"braster defowt a 1920x1080 pyskelys. Pan ow devnydhya unn esedhek "
+"pelldesktop gans unn skrin gowir, kliens gallos chanjya an braster a'n skrin "
+"gowir dres unn esedhek gans un PDU setDesktopSize. Fordhow skrin-kevrenna "
+"gasys komprehendya: *mirror-primary - Rekordya an skrin chif a'n esedhek "
+"usyer a-lemmyn. * extend - Gul unn skrin gowir nowydh ha devnydhya yth rag "
+"an esedhek pelldesktop. An braster kynsa a'n skrin gowir ma yw gorra dhe "
+"1920x1080 pykselys. Kliensow gallos aslea an braster kynsa gans nowedhyansow "
+"selyans skrin iskevresek."
 
 #~ msgid "GNOME Remote Desktop Handover Daemon"
-#~ msgstr "Usługa przekazania zdalnego pulpitu GNOME"
+#~ msgstr "Daemon Leuvherdh Pelldesktop GNOME"
