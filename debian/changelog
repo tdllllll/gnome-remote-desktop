@@ -1,16 +1,12 @@
-gnome-remote-desktop (50~rc-1) UNRELEASED; urgency=medium
+gnome-remote-desktop (50.1-1) UNRELEASED; urgency=medium
 
   * New upstream release
   * Refresh patches
   * Add gdm3 (<< 50~rc) to Breaks
     - The DBus interface for creating remote displays changed
       incompatibly.
-  * Note that gnome-remote-desktop/rdp is flakey with the current
-    versions of Mutter.
-    - Expecting 50.rc to contain some fixes for that.
-    - See: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/issues/301
 
- -- Charles <charles05@canonical.com>  Mon, 02 Mar 2026 15:03:08 +0000
+ -- Charles <charles05@canonical.com>  Fri, 24 Apr 2026 15:38:15 +0100
 
 gnome-remote-desktop (50~beta-1) experimental; urgency=medium
 
