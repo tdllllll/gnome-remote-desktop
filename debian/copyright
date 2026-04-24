@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: GNOME Remote Desktop
 Source: https://download.gnome.org/sources/gnome-remote-desktop/
+Upstream-Name: GNOME Remote Desktop
 
 Files: *
 Copyright:
