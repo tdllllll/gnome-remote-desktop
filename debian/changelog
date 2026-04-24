@@ -1,10 +1,17 @@
-gnome-remote-desktop (50.1-1) UNRELEASED; urgency=medium
+gnome-remote-desktop (50.1-1) experimental; urgency=medium
 
+  * Team upload
+
+  [ Charles ]
   * New upstream release
   * Refresh patches
   * Add gdm3 (<< 50~rc) to Breaks
     - The DBus interface for creating remote displays changed
       incompatibly.
+
+  [ Jeremy Bícha ]
+  * Run wrap-and-sort -ast
+  * Update Standards Version to 4.7.4
 
  -- Charles <charles05@canonical.com>  Fri, 24 Apr 2026 15:38:15 +0100
 
