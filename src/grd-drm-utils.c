@@ -64,6 +64,7 @@ grd_export_drm_timeline_syncfile (int        device_fd,
     {
       g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
                    "drmSyncobjCreate failed: %s", g_strerror (errno));
+      drmSyncobjDestroy (device_fd, export_handle);
       return -1;
     }
 
@@ -72,6 +73,7 @@ grd_export_drm_timeline_syncfile (int        device_fd,
     {
       g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
                    "drmSyncobjExportSyncFile failed: %s", g_strerror (errno));
+      drmSyncobjDestroy (device_fd, export_handle);
       return -1;
     }
 
@@ -145,9 +147,9 @@ grd_signal_drm_timeline_point (int        device_fd,
 
   if (drmSyncobjTimelineSignal (device_fd, &syncobj_handle, &timeline_point, 1) < 0)
     {
-      drmSyncobjDestroy (device_fd, syncobj_handle);
       g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
                    "drmSyncobjTimelineSignal failed: %s", g_strerror (errno));
+      drmSyncobjDestroy (device_fd, syncobj_handle);
       return FALSE;
     }
 

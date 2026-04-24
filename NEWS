@@ -1,3 +1,29 @@
+50.1
+====
+* Test improvements [akallabeth, Pascal; !391, !392]
+* Misc bug fixes & cleanups [Pascal; !395, !397]
+* Fix black screen on some NVIDIA GPUs [Pascal; !394]
+
+Contributors:
+  akallabeth, Pascal Nowack
+
+Translators:
+  Flynn Peck [kw], Марко Костић [sr], Artur S0 [ru], Sveinn í Felli [is],
+  Victoria Niedzielska [pl], Andika Triwidada [id], Salvatore Cocuzza [it]
+
+50.0
+====
+* Improve GDM remote display interoperability [Joan; !386]
+* Improve hardware acceleration compatibility [Pascal; !388]
+* Wait for GDM before initializing system daemon startup [Pascal; !387]
+
+Contributors:
+  Joan Torres Lopez, Pascal Nowack
+
+Translators:
+  Emin Tufan Çetin [tr], Abduqadir Abliz [ug], Hugo Carvalho [pt],
+  Ask Hjorth Larsen [da], Daniel [pl], Bruce Cowan [en_GB]
+
 50.rc
 =====
 * Add documentation for configuring Kerberos authentication [Jonas; !376]
