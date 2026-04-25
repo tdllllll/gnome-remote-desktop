@@ -1,10 +1,17 @@
-Description: fix build failure with freerdp 3.25
-Origin: Debian
-Forwarded: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/399
+From: =?utf-8?q?S=C3=A9bastien_Noel?= <sebastien@twolife.be>
+Date: Sat, 25 Apr 2026 10:41:25 +0200
+Subject: [PATCH] fix build failure with freerdp 3.25
 
+Forwarded: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/399
+---
+ tests/test-client-rdp.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tests/test-client-rdp.c b/tests/test-client-rdp.c
+index a06a187..fce13af 100644
 --- a/tests/test-client-rdp.c
 +++ b/tests/test-client-rdp.c
-@@ -249,7 +249,7 @@
+@@ -249,7 +249,7 @@ static BOOL
  rdp_client_authenticate (freerdp  *instance,
                           char    **username,
                           char    **password,
@@ -13,7 +20,7 @@ Forwarded: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/merge_requests/
  {
    /* Credentials were already parsed from the command line */
  
-@@ -307,7 +307,7 @@
+@@ -307,7 +307,7 @@ rdp_client_new (freerdp    *instance,
    instance->PreConnect = rdp_client_pre_connect;
    instance->PostConnect = rdp_client_post_connect;
    instance->PostDisconnect = rdp_client_post_disconnect;
