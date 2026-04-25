@@ -1,3 +1,10 @@
+gnome-remote-desktop (50.1-2) experimental; urgency=medium
+
+  * Team upload
+  * fix build failure with freerdp 3.25
+
+ -- Sébastien Noel <sebastien@twolife.be>  Sat, 25 Apr 2026 07:35:12 -0400
+
 gnome-remote-desktop (50.1-1) experimental; urgency=medium
 
   * Team upload
