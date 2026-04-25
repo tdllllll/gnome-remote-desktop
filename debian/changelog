@@ -1,3 +1,10 @@
+gnome-remote-desktop (49.2-3) unstable; urgency=high
+
+  * Team upload
+  * Fix build failure with freerdp 3.25
+
+ -- Sébastien Noel <sebastien@twolife.be>  Sat, 25 Apr 2026 07:40:07 -0400
+
 gnome-remote-desktop (49.2-2) unstable; urgency=medium
 
   * Bump Standards Version to 4.7.3
