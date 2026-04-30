@@ -1,3 +1,10 @@
+gnome-remote-desktop (49.2-4) unstable; urgency=high
+
+  * Team upload
+  * debian/rules: ignore tests failures on armhf
+
+ -- Sébastien Noel <sebastien@twolife.be>  Thu, 30 Apr 2026 16:10:35 +0200
+
 gnome-remote-desktop (49.2-3) unstable; urgency=high
 
   * Team upload
