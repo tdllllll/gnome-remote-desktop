@@ -53,6 +53,20 @@ gnome-remote-desktop (50~beta-1) experimental; urgency=medium
 
  -- Charles <charles05@canonical.com>  Wed, 04 Feb 2026 23:00:30 +0000
 
+gnome-remote-desktop (49.2-4) unstable; urgency=high
+
+  * Team upload
+  * debian/rules: ignore tests failures on armhf
+
+ -- Sébastien Noel <sebastien@twolife.be>  Thu, 30 Apr 2026 16:10:35 +0200
+
+gnome-remote-desktop (49.2-3) unstable; urgency=high
+
+  * Team upload
+  * Fix build failure with freerdp 3.25
+
+ -- Sébastien Noel <sebastien@twolife.be>  Sat, 25 Apr 2026 07:40:07 -0400
+
 gnome-remote-desktop (49.2-2) unstable; urgency=medium
 
   * Bump Standards Version to 4.7.3
