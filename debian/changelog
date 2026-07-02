@@ -1,3 +1,11 @@
+gnome-remote-desktop (50.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+  * d/p: refresh
+  * d/p/freerdp-3.25.patch: Dropped, included in this release.
+
+ -- Charles <charles05@canonical.com>  Thu, 02 Jul 2026 17:24:50 +0100
+
 gnome-remote-desktop (50.1-5) unstable; urgency=medium
 
   * Team upload
