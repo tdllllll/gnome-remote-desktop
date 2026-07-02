@@ -33,7 +33,7 @@ index cafba4e..8e86a0d 100644
  #mesondefine HAVE_RDP
  
 diff --git a/meson.build b/meson.build
-index e2d2e82..4622c3c 100644
+index c95524f..94d0e64 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -38,6 +38,7 @@ tss2_rc_dep = dependency('tss2-rc')
