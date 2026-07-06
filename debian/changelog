@@ -1,3 +1,31 @@
+gnome-remote-desktop (51~alpha-0ubuntu1) stonking; urgency=medium
+
+  * New upstream release
+  * d/patches: refresh
+  * d/patches: drop patches now included in 51~alpha upstream:
+    - rdp-pipewire-stream-Only-try-to-use-sync-timelines-when-u.patch
+      (MR394)
+    - tests-rdp-Ignore-cursor-updates-when-checking-for-the-scr.patch
+      (MR392)
+  * Ubuntu delta:
+    - d/watch: track alpha versions
+    - d/p/tests-rdp-tolerate-mutter-sigterm.patch: stop the rdp test
+      hanging until meson's timeout. stop_mutter runs in a dbus signal
+      handler, so its sys.exit(1) on a non-zero mutter teardown is
+      swallowed by python-dbus and the main loop never quits. Log
+      mutter's teardown exit code instead of failing the test on it.
+    - d/p/tests-fix-cleanup-race.patch: fix a flaky race in the test
+      cleanup EXIT trap where rm -rf of the temp dir could fail with
+      "Directory not empty"; retry once. Upstream test bug.
+    - d/rules: reenable build-time tests for riscv64 to see the
+      current status.
+    - d/p/data-add-grd-user-to-tss-group.patch: Allow access to the
+      TPM device for credentials storage (LP: #2161032)
+    - d/p/credentials-file-Detect-changes-at-runtime.patch:
+      (LP: #2156893)
+
+ -- Charles <charles05@canonical.com>  Mon, 06 Jul 2026 23:02:04 +0100
+
 gnome-remote-desktop (50.0-0ubuntu2) resolute; urgency=medium
 
   * Cherry-pick patch to fix black screen issues on RDP with NVIDIA
