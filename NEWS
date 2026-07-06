@@ -1,10 +1,11 @@
-50.2
-====
+51.alpha
+========
+* Simplify GDM remote display handling [Joan; !400]
 * Fix and enable hardware acceleration for amdgpu [Pascal; !401]
 * Fix failure to reconnect [Jonas; !402]
 
 Contributors:
-  Pascal Nowack, Jonas Ådahl
+  Joan Torres Lopez, Pascal Nowack, Jonas Ådahl
 
 Translators:
   Nathan Follens [nl], Jose Riha [sk], Danial Behzadi [fa], Vasil Pupkin [be],
