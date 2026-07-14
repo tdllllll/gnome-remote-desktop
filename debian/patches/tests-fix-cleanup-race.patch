@@ -1,0 +1,34 @@
+From: Charles <charles05@canonical.com>
+Date: Tue, 14 Jul 2026 16:31:59 +0100
+Subject: tests: make temp-dir cleanup non-fatal
+
+Forwarded: not-needed
+
+prepare-test-environment.sh removes its temporary dir in an EXIT trap under
+'set -e'. Session helpers spawned by the test (xdg-desktop-portal,
+xdg-permission-store, pipewire, wireplumber) may still be creating sockets in
+XDG_RUNTIME_DIR when the trap fires, so rm -rf can race them and exit non-zero
+("Directory not empty"). That aborts the wrapper and marks an otherwise
+successful run as failed. Retry the removal once after a short settle, and
+never let cleanup failure fail the test.
+---
+ tests/prepare-test-environment.sh | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/tests/prepare-test-environment.sh b/tests/prepare-test-environment.sh
+index 1ec70ae..4252bc4 100755
+--- a/tests/prepare-test-environment.sh
++++ b/tests/prepare-test-environment.sh
+@@ -3,7 +3,11 @@
+ set -xe
+ 
+ tmpdir=$(mktemp -d --tmpdir g-r-d-tests-XXXXXX)
+-trap '{ rm -rf $tmpdir; }' EXIT
++# Cleanup must never fail the test: session helpers (xdg-desktop-portal,
++# pipewire, wireplumber, ...) may still be creating sockets under
++# XDG_RUNTIME_DIR when the trap runs, which makes 'rm -rf' race them and exit
++# non-zero ("Directory not empty"). Retry once, then ignore the result.
++trap '{ rm -rf "$tmpdir" 2>/dev/null || { sleep 1; rm -rf "$tmpdir" 2>/dev/null; } || true; }' EXIT
+ 
+ export HOME="$tmpdir/home"
+ export XDG_RUNTIME_DIR="$tmpdir/xrd"
