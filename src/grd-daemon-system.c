@@ -189,7 +189,6 @@ on_handle_take_client (GrdDBusRemoteDesktopRdpHandover *interface,
                                                              fd_list,
                                                              fd_variant);
 
-  grd_close_connection_and_notify (remote_client->socket_connection);
   g_clear_object (&remote_client->socket_connection);
   g_clear_handle_id (&remote_client->abort_handover_source_id, g_source_remove);
 
@@ -575,8 +574,6 @@ grd_remote_client_free (GrdRemoteClient *remote_client)
 
   g_clear_pointer (&remote_client->id, g_free);
   g_clear_pointer (&remote_client->hostname, g_free);
-  if (remote_client->socket_connection)
-    grd_close_connection_and_notify (remote_client->socket_connection);
   g_clear_object (&remote_client->socket_connection);
   unregister_handover_iface (remote_client, remote_client->handover_src);
   unregister_handover_iface (remote_client, remote_client->handover_dst);
@@ -1099,7 +1096,6 @@ get_remote_id_from_remote_display (GrdDaemonSystem         *daemon_system,
                                    GrdDBusGdmRemoteDisplay *remote_display)
 {
   const char *display_remote_id;
-  g_autofree char *new_remote_id = NULL;
   g_autoptr (GError) error = NULL;
 
   display_remote_id = grd_dbus_gdm_remote_display_get_remote_id (remote_display);
@@ -1115,20 +1111,10 @@ get_remote_id_from_remote_display (GrdDaemonSystem         *daemon_system,
       return g_strdup (display_remote_id);
     }
 
-  /* If the remote display doesn't have a valid remote_id,
-   * generate a new one and set it */
-  new_remote_id = get_next_available_id (daemon_system);
-  if (!grd_dbus_gdm_remote_display_call_set_remote_id_sync (remote_display,
-                                                            new_remote_id,
-                                                            NULL,
-                                                            &error))
-    {
-      g_warning ("[DaemonSystem] Failed to set remote_id on display: %s",
-                 error->message);
-      return NULL;
-    }
-
-  return g_steal_pointer (&new_remote_id);
+  /* The remote display doesn't have a remote_id.
+   * Generate a new one to store the remote client in the hash table.
+   * GDM will update the remote_id later to a valid one. */
+  return get_next_available_id (daemon_system);
 }
 
 static GrdRemoteClient *
