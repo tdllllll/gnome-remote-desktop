@@ -1,5 +1,7 @@
 ---
-Bug-Database: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/issues
-Bug-Submit: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/issues/new
-Repository: https://gitlab.gnome.org/gnome/gnome-remote-desktop.git
+Archive: GNOME
+Bug-Database: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/work_items
+Bug-Submit: https://gitlab.gnome.org/GNOME/gnome-remote-desktop/-/work_items/new
+Repository: https://gitlab.gnome.org/GNOME/gnome-remote-desktop.git
 Repository-Browse: https://gitlab.gnome.org/GNOME/gnome-remote-desktop
+Security-Contact: https://gitlab.gnome.org/Teams/Releng/security
