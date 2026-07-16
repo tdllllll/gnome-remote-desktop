@@ -21,15 +21,8 @@ override_dh_installtmpfiles:
 
 override_dh_installsysusers:
 
-# Ignore build test failures on some architectures
-# These tests require working mutter & mutter's build tests
-# fail for these architectures too
 override_dh_auto_test:
-ifeq (,$(filter mips64el riscv64,$(DEB_HOST_ARCH)))
 	dh_auto_test
-else
-	dh_auto_test || true
-endif
 
 # https://launchpad.net/bugs/1973028
 override_dh_installsystemduser:
