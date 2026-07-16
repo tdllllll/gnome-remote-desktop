@@ -2,3 +2,4 @@ fdkaac.patch
 tests-rdp-tolerate-mutter-sigterm.patch
 tests-fix-cleanup-race.patch
 credentials-file-Detect-changes-at-runtime.patch
+data-Add-grd-user-to-tss-group.patch
