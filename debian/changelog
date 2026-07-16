@@ -1,10 +1,14 @@
-gnome-remote-desktop (50.2-1) UNRELEASED; urgency=medium
+gnome-remote-desktop (50.2-1) unstable; urgency=medium
 
+  [ Charles ]
   * New upstream release
   * d/p: refresh
-  * d/p/freerdp-3.25.patch: Dropped, included in this release.
+  * Remove d/p/freerdp-3.25.patch: included in this release.
 
- -- Charles <charles05@canonical.com>  Thu, 02 Jul 2026 17:24:50 +0100
+  [ Jeremy Bícha ]
+  * Update debhelper compat to 14
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 16 Jul 2026 11:22:04 +0200
 
 gnome-remote-desktop (50.1-5) unstable; urgency=medium
 
