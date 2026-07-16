@@ -6,7 +6,7 @@ Uploaders:
  Marco Trevisan (Treviño) <marco@ubuntu.com>,
 Section: gnome
 Build-Depends:
- debhelper-compat (= 13),
+ debhelper-compat (= 14),
  dh-sequence-gnome,
  asciidoc-base,
  dbus-daemon <!nocheck>,

@@ -6,7 +6,7 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,-O1 -Wl,-z,defs
 
 %:
-	dh $@
+	dh $@ --without=single-binary
 
 # https://bugs.debian.org/981285
 # https://launchpad.net/bugs/1977614
