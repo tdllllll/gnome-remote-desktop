@@ -1,3 +1,13 @@
+gnome-remote-desktop (50.2-0ubuntu0.1) resolute; urgency=medium
+
+  * New upstream bugfix release (LP: #2160837)
+  * Drop patches applied upstream:
+    - tests-rdp-Ignore-cursor-updates-when-checking-for-the-scr.patch
+    - rdp-pipewire-stream-Only-try-to-use-sync-timelines-when-u.patch
+  * d/gbp.conf, d/control: Update VCS tags for Resolute salsa branch.
+
+ -- Charles <charles05@canonical.com>  Tue, 21 Jul 2026 10:06:53 +0100
+
 gnome-remote-desktop (50.0-0ubuntu2) resolute; urgency=medium
 
   * Cherry-pick patch to fix black screen issues on RDP with NVIDIA
