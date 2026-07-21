@@ -24,6 +24,7 @@
 #include <freerdp/client/cmdline.h>
 #include <freerdp/freerdp.h>
 #include <freerdp/gdi/gfx.h>
+#include <freerdp/version.h>
 #include <glib.h>
 
 #define TEST_1_WIDTH 800
@@ -194,6 +195,9 @@ rdp_update_end_paint (rdpContext *rdp_context)
   int32_t x, y;
   uint32_t width, height;
 
+  if (rdp_context->gdi->primary->hdc->hwnd->invalid->null)
+    return TRUE;
+
   x = rdp_context->gdi->primary->hdc->hwnd->invalid->x;
   y = rdp_context->gdi->primary->hdc->hwnd->invalid->y;
   width = rdp_context->gdi->primary->hdc->hwnd->invalid->w;
@@ -243,10 +247,18 @@ rdp_client_post_disconnect (freerdp *instance)
 }
 
 static BOOL
+#if FREERDP_VERSION_MAJOR == 3 && FREERDP_VERSION_MINOR >= 25
+rdp_client_authenticate_ex (freerdp          *instance,
+                            char            **username,
+                            char            **password,
+                            char            **domain,
+                            rdp_auth_reason   reason)
+#else
 rdp_client_authenticate (freerdp  *instance,
                          char    **username,
                          char    **password,
                          char    **domain)
+#endif /* FREERDP_VERSION_MAJOR == 3 && FREERDP_VERSION_MINOR >= 25 */
 {
   /* Credentials were already parsed from the command line */
 
@@ -304,7 +316,11 @@ rdp_client_new (freerdp    *instance,
   instance->PreConnect = rdp_client_pre_connect;
   instance->PostConnect = rdp_client_post_connect;
   instance->PostDisconnect = rdp_client_post_disconnect;
+#if FREERDP_VERSION_MAJOR == 3 && FREERDP_VERSION_MINOR >= 25
+  instance->AuthenticateEx = rdp_client_authenticate_ex;
+#else
   instance->Authenticate = rdp_client_authenticate;
+#endif /* FREERDP_VERSION_MAJOR == 3 && FREERDP_VERSION_MINOR >= 25 */
   instance->VerifyCertificateEx = rdp_client_verify_certificate_ex;
   instance->VerifyChangedCertificateEx = rdp_client_verify_changed_certificate_ex;
 

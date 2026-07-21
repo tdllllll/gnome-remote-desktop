@@ -153,23 +153,36 @@ grd_throttler_deny_connection (GrdThrottler      *throttler,
                                const char        *peer_name,
                                GSocketConnection *connection)
 {
-  g_debug ("Denying connection from %s", peer_name);
+  g_debug ("[Throttler] Denying connection from %s", peer_name);
   g_io_stream_close (G_IO_STREAM (connection), NULL, NULL);
 }
 
-static void
-on_connection_closed_changed (GSocketConnection *connection,
-                              GParamSpec        *pspec,
-                              GrdThrottler      *throttler)
+typedef struct _ConnectionData
 {
-  const char *peer_name;
+  GrdThrottler *throttler;
+  char *peer_name;
+  GSocketConnection *connection;
+} ConnectionData;
+
+static void
+connection_data_free (ConnectionData *connection_data)
+{
+  GrdThrottler *throttler;
   GrdPeer *peer;
 
-  g_assert (g_io_stream_is_closed (G_IO_STREAM (connection)));
+  throttler = connection_data->throttler;
+  if (throttler)
+    {
+      g_clear_weak_pointer (&connection_data->throttler);
 
-  peer_name = g_object_get_qdata (G_OBJECT (connection), quark_remote_address);
-  peer = g_hash_table_lookup (throttler->peers, peer_name);
-  grd_throttler_unregister_connection (throttler, connection, peer);
+      peer = g_hash_table_lookup (throttler->peers, connection_data->peer_name);
+      grd_throttler_unregister_connection (throttler,
+                                           connection_data->connection,
+                                           peer);
+    }
+
+  g_free (connection_data->peer_name);
+  g_free (connection_data);
 }
 
 static void
@@ -177,17 +190,23 @@ grd_throttler_allow_connection (GrdThrottler      *throttler,
                                 GSocketConnection *connection,
                                 GrdPeer           *peer)
 {
-  g_debug ("Accepting connection from %s", peer->name);
+  ConnectionData *connection_data;
+
+  g_debug ("[Throttler] Accepting connection from %s", peer->name);
+
+  connection_data = g_new0 (ConnectionData, 1);
+  g_set_weak_pointer (&connection_data->throttler, throttler);
+  connection_data->connection = connection;
+  connection_data->peer_name = g_strdup (peer->name);
 
   throttler->allow_callback (throttler, connection, throttler->user_data);
 
   peer->last_accept_us = g_get_monotonic_time ();
 
   g_object_set_qdata_full (G_OBJECT (connection), quark_remote_address,
-                           g_strdup (peer->name), g_free);
+                           connection_data,
+                           (GDestroyNotify) connection_data_free);
   grd_throttler_register_connection (throttler, peer);
-  g_signal_connect (connection, "notify::closed",
-                    G_CALLBACK (on_connection_closed_changed), throttler);
 }
 
 static gboolean
@@ -365,7 +384,7 @@ maybe_delay_connection (GrdThrottler      *throttler,
       return;
     }
 
-  g_debug ("Delaying connection from %s", peer->name);
+  g_debug ("[Throttler] Delaying connection from %s", peer->name);
 
   g_queue_push_tail (delayed_connections, g_object_ref (connection));
   maybe_queue_timeout (throttler);
@@ -415,7 +434,7 @@ grd_throttler_handle_connection (GrdThrottler      *throttler,
     g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (remote_address));
   peer_name = g_inet_address_to_string (inet_address);
 
-  g_debug ("New incoming connection from %s", peer_name);
+  g_debug ("[Throttler] New incoming connection from %s", peer_name);
 
   peer = ensure_peer (throttler, peer_name);
 
