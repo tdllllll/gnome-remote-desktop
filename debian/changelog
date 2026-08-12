@@ -1,3 +1,9 @@
+gnome-remote-desktop (48.1-4+tdllllll) unstable; urgency=medium
+
+  * session: Change 'disable-animations' property to FALSE
+
+ -- tdllllll <78018413+tdllllll@users.noreply.github.com>  Wed, 12 Aug 2026 22:28:02 +0000
+
 gnome-remote-desktop (48.1-4) unstable; urgency=medium
 
   * Team upload
