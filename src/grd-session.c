@@ -1439,7 +1439,7 @@ on_eis_connected (GObject      *object,
                          g_variant_new_string (remote_desktop_session_id));
   g_variant_builder_add (&properties_builder, "{sv}",
                          "disable-animations",
-                         g_variant_new_boolean (TRUE));
+                         g_variant_new_boolean (FALSE));
   properties_variant = g_variant_builder_end (&properties_builder);
 
   screen_cast_proxy = grd_context_get_mutter_screen_cast_proxy (priv->context);
